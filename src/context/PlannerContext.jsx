@@ -117,11 +117,13 @@ export const PlannerProvider = ({ children }) => {
         });
 
         if (saved) {
-            // Update temp ID with real DB ID
-            setEmployees(prev => prev.map(e => e.id === tempId ? { ...e, id: saved.id } : e));
-            addToLog(`Added employee ${name} to Database`, 'success');
+            // Replace temp ID with real DB ID
+            setEmployees(prev => prev.map(e => e.id === tempId ? { ...saved, startTime, endTime } : e));
+            addToLog(`Added ${name} to team`, 'success');
         } else {
-            addToLog(`Failed to save ${name} to DB`, 'error');
+            // Revert optimistic update if failed
+            setEmployees(prev => prev.filter(e => e.id !== tempId));
+            addToLog(`Failed to save ${name}`, 'error');
         }
     };
 
