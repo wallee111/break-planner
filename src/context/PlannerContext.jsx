@@ -1,12 +1,32 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { INITIAL_EMPLOYEES, INITIAL_RULES, INITIAL_COVERAGE_RULES, INITIAL_ROLE_COLORS } from '../utils/initialData';
+import { INITIAL_ROSTER } from '../utils/rosterData';
+import { generateSchedule as genScheduleAlgo, validateSchedule as valScheduleAlgo } from '../utils/scheduler';
+import { fetchEmployees, createEmployee, updateEmployee as apiUpdateEmployee, deleteEmployee as apiDeleteEmployee, saveSchedule } from '../services/plannerService';
 import { useAuth } from './AuthContext';
 
-// ... imports ...
+const PlannerContext = createContext();
+
+export const usePlanner = () => useContext(PlannerContext);
 
 export const PlannerProvider = ({ children }) => {
-    const { user, loading: authLoading } = useAuth(); // Consume Auth Context
+    const { user, loading: authLoading } = useAuth();
 
     const [employees, setEmployees] = useState(INITIAL_EMPLOYEES);
-    // ... other state ...
+    const [rules, setRules] = useState(INITIAL_RULES);
+    const [coverageRules, setCoverageRules] = useState(INITIAL_COVERAGE_RULES);
+    const [schedule, setSchedule] = useState([]); // Array of employee schedules
+    const [validationErrors, setValidationErrors] = useState([]);
+    const [roster, setRoster] = useState(INITIAL_ROSTER);
+    const [roleColors, setRoleColors] = useState(INITIAL_ROLE_COLORS);
+
+    const updateRules = (newRules) => {
+        setRules(newRules);
+    };
+
+    const updateCoverageRules = (newRules) => {
+        setCoverageRules(newRules);
+    };
 
     // --- Supabase Integration ---
     const [isLoading, setIsLoading] = useState(true);
@@ -66,7 +86,7 @@ export const PlannerProvider = ({ children }) => {
                     }
                 }
 
-                // 2. Schedule
+                // 2. Schedule (Load today's if exists - future improvement)
             } catch (err) {
                 console.error('Data load failed:', err);
             } finally {
@@ -74,7 +94,7 @@ export const PlannerProvider = ({ children }) => {
             }
         };
         loadData();
-    }, [user, authLoading]); // Re-run when auth state changes
+    }, [user, authLoading]);
 
     // Helper to persist employee changes
     const addEmployee = async (empData) => {
