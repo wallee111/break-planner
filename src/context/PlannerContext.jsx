@@ -1,35 +1,30 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { INITIAL_EMPLOYEES, INITIAL_RULES, INITIAL_COVERAGE_RULES, INITIAL_ROLE_COLORS } from '../utils/initialData';
-import { INITIAL_ROSTER } from '../utils/rosterData';
-import { generateSchedule as genScheduleAlgo, validateSchedule as valScheduleAlgo } from '../utils/scheduler';
-import { fetchEmployees, createEmployee, updateEmployee as apiUpdateEmployee, deleteEmployee as apiDeleteEmployee, saveSchedule } from '../services/plannerService';
+import { useAuth } from './AuthContext';
 
-const PlannerContext = createContext();
-
-export const usePlanner = () => useContext(PlannerContext);
+// ... imports ...
 
 export const PlannerProvider = ({ children }) => {
+    const { user, loading: authLoading } = useAuth(); // Consume Auth Context
+
     const [employees, setEmployees] = useState(INITIAL_EMPLOYEES);
-    const [rules, setRules] = useState(INITIAL_RULES);
-    const [coverageRules, setCoverageRules] = useState(INITIAL_COVERAGE_RULES);
-    const [schedule, setSchedule] = useState([]); // Array of employee schedules
-    const [validationErrors, setValidationErrors] = useState([]);
-    const [roster, setRoster] = useState(INITIAL_ROSTER);
-    const [roleColors, setRoleColors] = useState(INITIAL_ROLE_COLORS);
-
-    const updateRules = (newRules) => {
-        setRules(newRules);
-    };
-
-    const updateCoverageRules = (newRules) => {
-        setCoverageRules(newRules);
-    };
+    // ... other state ...
 
     // --- Supabase Integration ---
     const [isLoading, setIsLoading] = useState(true);
 
     // Initial Load
     useEffect(() => {
+        // 1. Wait for Auth to finish initializing
+        if (authLoading) return;
+
+        // 2. If no user, stay in "Guest Mode" (Local state only)
+        if (!user) {
+            console.log('Guest mode: Using local initial data.');
+            setEmployees(INITIAL_EMPLOYEES);
+            setIsLoading(false);
+            return;
+        }
+
+        // 3. User exists: Load from DB
         const loadData = async () => {
             setIsLoading(true);
             try {
@@ -44,15 +39,11 @@ export const PlannerProvider = ({ children }) => {
                     }));
                     setEmployees(mappedEmployees);
                 } else {
-                    // SEED DATA: If user has no data, seed with defaults so they have something to play with
+                    // SEED DATA: Only seed if we are SURE we are a real user with explicit no data
                     console.log('New user detected. Seeding default data...');
                     const seededEmployees = [];
                     for (const emp of INITIAL_EMPLOYEES) {
-                        const { id, ...empData } = emp; // Strip local ID
-                        // Map local keys to DB keys if needed, but logic uses same keys mostly
-                        // service expects {name, roles, startTime, endTime} which matches INITIAL_EMPLOYEES (mostly)
-                        // Actually INITIAL_EMPLOYEES might have StartTime/EndTime capitalized?
-                        // Let's create proper object
+                        const { id, ...empData } = emp;
                         const newEmp = await createEmployee({
                             name: emp.name,
                             roles: emp.roles,
@@ -62,14 +53,20 @@ export const PlannerProvider = ({ children }) => {
                         if (newEmp) seededEmployees.push(newEmp);
                     }
                     if (seededEmployees.length > 0) {
-                        setEmployees(seededEmployees);
+                        // Remap seeded data back to camelCase for state
+                        const mappedSeeded = seededEmployees.map(e => ({
+                            ...e,
+                            startTime: e.start_time || '08:00',
+                            endTime: e.end_time || '17:00'
+                        }));
+                        setEmployees(mappedSeeded);
                         addToLog('Welcome! Created your starter team.', 'success');
                     } else {
-                        setEmployees([]); // Should be empty if seed failed, not mock data with fake IDs
+                        setEmployees([]);
                     }
                 }
 
-                // 2. Schedule (Load today's if exists - future improvement)
+                // 2. Schedule
             } catch (err) {
                 console.error('Data load failed:', err);
             } finally {
@@ -77,7 +74,7 @@ export const PlannerProvider = ({ children }) => {
             }
         };
         loadData();
-    }, []);
+    }, [user, authLoading]); // Re-run when auth state changes
 
     // Helper to persist employee changes
     const addEmployee = async (empData) => {
