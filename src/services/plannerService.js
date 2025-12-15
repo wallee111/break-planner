@@ -17,42 +17,46 @@ export const fetchEmployees = async () => {
 };
 
 export const createEmployee = async (employee) => {
-    alert('createEmployee() called'); // Temp: confirm function runs
-
-    // Debug: surface auth info
     const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError) {
-        alert(`Supabase auth error: ${userError.message}`);
-        console.error('Error fetching user:', userError);
+
+    if (userError || !user) {
+        console.error('Error fetching user for create:', userError);
         return null;
     }
 
-    if (!user) {
-        alert('No Supabase user session found. Please log in.');
-        return null;
-    }
+    // Map App (Camel) -> DB (Snake)
+    const dbPayload = {
+        name: employee.name,
+        roles: employee.roles, // Schema check: text[] is correct
+        start_time: employee.startTime || employee.start_time || '09:00',
+        end_time: employee.endTime || employee.end_time || '17:00',
+        user_id: user.id
+    };
 
     const { data, error } = await supabase
         .from('employees')
-        .insert([{ ...employee, user_id: user.id }])
+        .insert([dbPayload])
         .select()
         .single();
 
     if (error) {
-        alert(`Supabase insert error: ${error.message}`); // Temp: surface Supabase insert errors
         console.error('Error creating employee:', error);
         return null;
     }
-
-    // Debug: confirm success
-    alert(`Employee saved with id: ${data?.id || 'unknown'}`);
     return data;
 };
 
 export const updateEmployee = async (id, updates) => {
+    // Map App (Camel) -> DB (Snake) for partial updates
+    const dbPayload = {};
+    if (updates.name !== undefined) dbPayload.name = updates.name;
+    if (updates.roles !== undefined) dbPayload.roles = updates.roles;
+    if (updates.startTime !== undefined) dbPayload.start_time = updates.startTime;
+    if (updates.endTime !== undefined) dbPayload.end_time = updates.endTime;
+
     const { data, error } = await supabase
         .from('employees')
-        .update(updates)
+        .update(dbPayload)
         .eq('id', id)
         .select()
         .single();
