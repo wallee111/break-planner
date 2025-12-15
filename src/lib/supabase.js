@@ -21,15 +21,15 @@ const isValidUrl = (urlString) => {
     }
 }
 
-let supabase; // Changed from 'client' to 'supabase'
+let client;
 
 try {
     if (supabaseUrl && isValidUrl(supabaseUrl) && supabaseAnonKey) {
-        supabase = createClient(supabaseUrl, supabaseAnonKey);
+        client = createClient(supabaseUrl, supabaseAnonKey);
 
         // Debug helper (remove in production)
         if (typeof window !== 'undefined') {
-            window.supabase = supabase;
+            window.supabase = client;
         }
         if (import.meta.env.DEV) {
             const keyPreview = supabaseAnonKey.length > 12 ? `${supabaseAnonKey.slice(0, 12)}...` : supabaseAnonKey;
