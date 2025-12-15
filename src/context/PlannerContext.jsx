@@ -88,6 +88,8 @@ export const PlannerProvider = ({ children }) => {
 
                 // 3. Settings (Rules & Colors)
                 const dbSettings = await fetchSettings();
+                console.log('[PlannerContext] Loaded Settings:', dbSettings);
+
                 if (dbSettings) {
                     if (dbSettings.break_rules && dbSettings.break_rules.length > 0) {
                         setRules(dbSettings.break_rules);
@@ -95,12 +97,20 @@ export const PlannerProvider = ({ children }) => {
                     if (dbSettings.coverage_rules && dbSettings.coverage_rules.length > 0) {
                         setCoverageRules(dbSettings.coverage_rules);
                     }
+                    // Fix: Check if role_colors is truthy, not just keys length, 
+                    // though if it's {}, we might still want to merge or ignore.
+                    // If DB has {}, and we skip, we use INITIAL. 
+                    // If DB has valid colors, we use them.
                     if (dbSettings.role_colors && Object.keys(dbSettings.role_colors).length > 0) {
+                        console.log('[PlannerContext] Applying Role Colors:', dbSettings.role_colors);
                         setRoleColors(dbSettings.role_colors);
+                    } else {
+                        console.log('[PlannerContext] No (or empty) role_colors in DB. Using defaults.');
+                        // We do NOT setRoleColors here, keeping INITIAL_ROLE_COLORS from state init.
+                        // UNLESS check if dbSettings.role_colors is explicitly {} (meaning user wiped them?)
+                        // For now, assume {} means "not set yet" -> use defaults.
                     }
                 } else {
-                    // Initialize settings in DB if they don't exist? 
-                    // Or just lazy load. Let's just use defaults comfortably.
                     console.log('No settings found, using defaults.');
                 }
 
@@ -281,6 +291,7 @@ export const PlannerProvider = ({ children }) => {
 
     const updateRoleColor = (role, color) => {
         const newColors = { ...roleColors, [role]: color };
+        console.log(`[PlannerContext] Updating Color for ${role} to ${color}. Saving:`, newColors);
         setRoleColors(newColors);
         if (user) {
             updateSettings({ role_colors: newColors });
