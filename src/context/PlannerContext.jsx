@@ -3,8 +3,8 @@ import { INITIAL_EMPLOYEES, INITIAL_RULES, INITIAL_COVERAGE_RULES, INITIAL_ROLE_
 import { INITIAL_ROSTER } from '../utils/rosterData';
 import { generateSchedule as genScheduleAlgo, validateSchedule as valScheduleAlgo } from '../utils/scheduler';
 import {
-    fetchEmployees, createEmployee, updateEmployee, deleteEmployee,
-    fetchRoster, addToRoster, updateRosterEmployee, deleteFromRoster,
+    fetchEmployees, createEmployee, updateEmployee as apiUpdateEmployee, deleteEmployee as apiDeleteEmployee,
+    fetchRoster, addToRoster as apiAddToRoster, updateRosterEmployee as apiUpdateRoster, deleteFromRoster as apiDeleteRoster,
     fetchSettings, updateSettings
 } from '../services/plannerService';
 import { useAuth } from './AuthContext';
