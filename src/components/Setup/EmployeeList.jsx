@@ -6,7 +6,7 @@ import { Input } from '../ui/Input';
 import { Trash2, Plus, GripVertical } from 'lucide-react';
 
 export const EmployeeList = () => {
-    const { employees, addEmployee, updateEmployee, removeEmployee, roster } = usePlanner();
+    const { employees, addEmployee, updateEmployee, removeEmployee, roster, clearTeam } = usePlanner();
 
     const handleAddField = () => {
         addEmployee({
@@ -45,78 +45,81 @@ export const EmployeeList = () => {
                             <option key={r.id} value={r.id}>{r.name} ({r.defaultRole || r.role})</option>
                         ))}
                     </select>
-                )}
+                    </select>
+                )
+}
+                <Button onClick={clearTeam} variant="secondary" className="hover:bg-red-50 hover:text-red-600 hover:border-red-200"><Trash2 className="w-4 h-4" /> Clear All</Button>
                 <Button onClick={handleAddField} variant="secondary"><Plus className="w-4 h-4" /> Add Empty Row</Button>
-            </div>
+            </div >
         }>
-            <div className="space-y-4">
-                {employees.length === 0 && (
-                    <div className="text-center py-12 text-slate-400">
-                        No employees added yet. Click "Add Employee" to start.
-                    </div>
-                )}
-
-                {employees.map((emp) => (
-                    <div key={emp.id} className="group flex items-center gap-4 p-4 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-white hover:shadow-sm transition-all duration-200">
-                        <div className="text-slate-300 cursor-grab active:cursor-grabbing">
-                            <GripVertical className="w-5 h-5" />
-                        </div>
-
-                        <div className="flex-1 grid grid-cols-12 gap-4">
-                            <div className="col-span-4">
-                                <label className="text-xs font-semibold text-slate-500 uppercase mb-1 block">Name</label>
-                                <Input
-                                    value={emp.name}
-                                    onChange={(e) => updateEmployee(emp.id, { name: e.target.value })}
-                                    placeholder="e.g. Alex Smith"
-                                    className="bg-white"
-                                />
-                            </div>
-
-                            <div className="col-span-3">
-                                <label className="text-xs font-semibold text-slate-500 uppercase mb-1 block">Role</label>
-                                <select
-                                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    value={emp.roles[0] || ''}
-                                    onChange={(e) => updateEmployee(emp.id, { roles: [e.target.value] })}
-                                >
-                                    <option value="">Select Role</option>
-                                    <option value="Manager">Manager</option>
-                                    <option value="Lead">Lead</option>
-                                    <option value="Product Guide">Product Guide</option>
-                                </select>
-                            </div>
-
-                            <div className="col-span-2">
-                                <label className="text-xs font-semibold text-slate-500 uppercase mb-1 block">Start</label>
-                                <Input
-                                    type="time"
-                                    value={emp.startTime}
-                                    onChange={(e) => updateEmployee(emp.id, { startTime: e.target.value })}
-                                    className="bg-white"
-                                />
-                            </div>
-
-                            <div className="col-span-2">
-                                <label className="text-xs font-semibold text-slate-500 uppercase mb-1 block">End</label>
-                                <Input
-                                    type="time"
-                                    value={emp.endTime}
-                                    onChange={(e) => updateEmployee(emp.id, { endTime: e.target.value })}
-                                    className="bg-white"
-                                />
-                            </div>
-                        </div>
-
-                        <button
-                            onClick={() => removeEmployee(emp.id)}
-                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                            <Trash2 className="w-5 h-5" />
-                        </button>
-                    </div>
-                ))}
+    <div className="space-y-4">
+        {employees.length === 0 && (
+            <div className="text-center py-12 text-slate-400">
+                No employees added yet. Click "Add Employee" to start.
             </div>
-        </Card>
+        )}
+
+        {employees.map((emp) => (
+            <div key={emp.id} className="group flex items-center gap-4 p-4 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-white hover:shadow-sm transition-all duration-200">
+                <div className="text-slate-300 cursor-grab active:cursor-grabbing">
+                    <GripVertical className="w-5 h-5" />
+                </div>
+
+                <div className="flex-1 grid grid-cols-12 gap-4">
+                    <div className="col-span-4">
+                        <label className="text-xs font-semibold text-slate-500 uppercase mb-1 block">Name</label>
+                        <Input
+                            value={emp.name}
+                            onChange={(e) => updateEmployee(emp.id, { name: e.target.value })}
+                            placeholder="e.g. Alex Smith"
+                            className="bg-white"
+                        />
+                    </div>
+
+                    <div className="col-span-3">
+                        <label className="text-xs font-semibold text-slate-500 uppercase mb-1 block">Role</label>
+                        <select
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            value={emp.roles[0] || ''}
+                            onChange={(e) => updateEmployee(emp.id, { roles: [e.target.value] })}
+                        >
+                            <option value="">Select Role</option>
+                            <option value="Manager">Manager</option>
+                            <option value="Lead">Lead</option>
+                            <option value="Product Guide">Product Guide</option>
+                        </select>
+                    </div>
+
+                    <div className="col-span-2">
+                        <label className="text-xs font-semibold text-slate-500 uppercase mb-1 block">Start</label>
+                        <Input
+                            type="time"
+                            value={emp.startTime}
+                            onChange={(e) => updateEmployee(emp.id, { startTime: e.target.value })}
+                            className="bg-white"
+                        />
+                    </div>
+
+                    <div className="col-span-2">
+                        <label className="text-xs font-semibold text-slate-500 uppercase mb-1 block">End</label>
+                        <Input
+                            type="time"
+                            value={emp.endTime}
+                            onChange={(e) => updateEmployee(emp.id, { endTime: e.target.value })}
+                            className="bg-white"
+                        />
+                    </div>
+                </div>
+
+                <button
+                    onClick={() => removeEmployee(emp.id)}
+                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                    <Trash2 className="w-5 h-5" />
+                </button>
+            </div>
+        ))}
+    </div>
+        </Card >
     );
 };

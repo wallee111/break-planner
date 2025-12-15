@@ -59,31 +59,8 @@ export const PlannerProvider = ({ children }) => {
                     }));
                     setEmployees(mappedEmployees);
                 } else {
-                    // SEED DATA: Only seed if we are SURE we are a real user with explicit no data
-                    console.log('New user detected. Seeding default data...');
-                    const seededEmployees = [];
-                    for (const emp of INITIAL_EMPLOYEES) {
-                        const { id, ...empData } = emp;
-                        const newEmp = await createEmployee({
-                            name: emp.name,
-                            roles: emp.roles,
-                            start_time: emp.startTime,
-                            end_time: emp.endTime
-                        });
-                        if (newEmp) seededEmployees.push(newEmp);
-                    }
-                    if (seededEmployees.length > 0) {
-                        // Remap seeded data back to camelCase for state
-                        const mappedSeeded = seededEmployees.map(e => ({
-                            ...e,
-                            startTime: e.start_time || '08:00',
-                            endTime: e.end_time || '17:00'
-                        }));
-                        setEmployees(mappedSeeded);
-                        addToLog('Welcome! Created your starter team.', 'success');
-                    } else {
-                        setEmployees([]);
-                    }
+                    // Start Empty (No Auto-Seeding)
+                    setEmployees([]);
                 }
 
                 // 2. Roster
@@ -95,8 +72,6 @@ export const PlannerProvider = ({ children }) => {
                     }));
                     setRoster(mappedRoster);
                 } else {
-                    // Seed Roster (if empty)
-                    // Optional: could seed from INITIAL_ROSTER but maybe better to start empty or copy from employees
                     setRoster([]);
                 }
 
@@ -109,6 +84,21 @@ export const PlannerProvider = ({ children }) => {
         };
         loadData();
     }, [user, authLoading]);
+
+    const clearTeam = async () => {
+        if (!window.confirm('Are you sure you want to clear the entire daily team?')) return;
+
+        // Optimistic
+        const idsToDelete = employees.map(e => e.id);
+        setEmployees([]);
+
+        // DB
+        // In a real app we'd use a bulk delete, but loop is fine for MVP size
+        for (const id of idsToDelete) {
+            await apiDeleteEmployee(id);
+        }
+        addToLog('Cleared daily team', 'warning');
+    };
 
     // Helper to persist employee changes
     const addEmployee = async (empData) => {
@@ -286,7 +276,8 @@ export const PlannerProvider = ({ children }) => {
         updateRoleColor,
         activityLog,
         validateNow,
-        isLoading
+        isLoading,
+        clearTeam
     };
 
     return (
