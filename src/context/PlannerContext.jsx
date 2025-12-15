@@ -67,6 +67,14 @@ export const PlannerProvider = ({ children }) => {
                         startTime: e.start_time || '08:00',
                         endTime: e.end_time || '17:00'
                     }));
+
+                    // Sort by Start Time
+                    mappedEmployees.sort((a, b) => {
+                        const tA = (a.startTime || '00:00') > (b.startTime || '00:00') ? 1 : -1;
+                        if ((a.startTime || '00:00') !== (b.startTime || '00:00')) return tA;
+                        return 0;
+                    });
+
                     setEmployees(mappedEmployees);
                 } else {
                     // Start Empty (No Auto-Seeding)
@@ -163,7 +171,15 @@ export const PlannerProvider = ({ children }) => {
             startTime,
             endTime
         };
-        setEmployees(prev => [newEmp, ...prev]);
+        setEmployees(prev => {
+            const updated = [newEmp, ...prev];
+            // Keep sorted
+            return updated.sort((a, b) => {
+                const tA = (a.startTime || '00:00') > (b.startTime || '00:00') ? 1 : -1;
+                if ((a.startTime || '00:00') !== (b.startTime || '00:00')) return tA;
+                return 0;
+            });
+        });
 
         // DB Save
         const saved = await createEmployee({

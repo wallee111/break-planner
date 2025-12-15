@@ -18,12 +18,20 @@ const getPriority = (roles) => {
 };
 
 export const generateSchedule = (employees, rules) => {
-    // 1. Sort employees by priority (Higher first)
+    // 1. Sort employees by Start Time (Earliest first), then Priority
     const sortedEmployees = [...employees].sort((a, b) => {
+        // Parse times to comparable values
+        const tA = parse(a.startTime, 'HH:mm', new Date()).getTime();
+        const tB = parse(b.startTime, 'HH:mm', new Date()).getTime();
+
+        if (tA !== tB) return tA - tB;
+
+        // Secondary sort: Priority
         const pA = getPriority(a.roles);
         const pB = getPriority(b.roles);
         if (pA !== pB) return pB - pA;
-        return a.id.localeCompare(b.id); // Stable sort fallback
+
+        return a.id.localeCompare(b.id);
     });
 
     // 2. Initialize Global Load Map (15m slots)

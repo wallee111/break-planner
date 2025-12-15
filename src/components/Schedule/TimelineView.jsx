@@ -24,8 +24,44 @@ export const TimelineView = () => {
   };
 
   // Determine view range
-  const startHour = 8;
-  const endHour = 20;
+  const [viewRange, setViewRange] = useState({ start: 8, end: 20 });
+
+  useEffect(() => {
+    if (!employees || employees.length === 0) return;
+
+    let minHour = 24;
+    let maxHour = 0;
+
+    employees.forEach(emp => {
+      if (!emp.startTime || !emp.endTime) return;
+      const start = parse(emp.startTime, 'HH:mm', new Date());
+      const end = parse(emp.endTime, 'HH:mm', new Date());
+
+      // Handle overnight shifts? For MVP assume same day or handled by comparison
+      // Just check hours
+      // To be safe, let's look at the hour value
+      const sH = start.getHours();
+      let eH = end.getHours();
+      if (end.getMinutes() > 0) eH += 1; // Round up end time
+      if (eH < sH) eH += 24; // Handle overnight wrap for calculation
+
+      if (sH < minHour) minHour = sH;
+      if (eH > maxHour) maxHour = eH;
+    });
+
+    // Add Buffer
+    minHour = Math.max(0, minHour - 1);
+    maxHour = Math.min(28, maxHour + 1); // Allow up to 4am next day visually
+
+    // If defaults (no data), stick to 8-20
+    if (minHour === 24) minHour = 8;
+    if (maxHour === 0) maxHour = 20;
+
+    setViewRange({ start: minHour, end: maxHour });
+  }, [employees]);
+
+  const startHour = viewRange.start;
+  const endHour = viewRange.end;
   const totalHours = endHour - startHour;
 
   const getLeftPos = (timeStr) => {
