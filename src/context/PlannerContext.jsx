@@ -88,7 +88,7 @@ export const PlannerProvider = ({ children }) => {
 
                 // 3. Settings (Rules & Colors)
                 const dbSettings = await fetchSettings();
-                console.log('[PlannerContext] Loaded Settings:', dbSettings);
+                console.log('[PlannerContext] Loaded Settings:', JSON.stringify(dbSettings, null, 2));
 
                 if (dbSettings) {
                     if (dbSettings.break_rules && dbSettings.break_rules.length > 0) {
@@ -102,7 +102,7 @@ export const PlannerProvider = ({ children }) => {
                     // If DB has {}, and we skip, we use INITIAL. 
                     // If DB has valid colors, we use them.
                     if (dbSettings.role_colors && Object.keys(dbSettings.role_colors).length > 0) {
-                        console.log('[PlannerContext] Applying Role Colors:', dbSettings.role_colors);
+                        console.log('[PlannerContext] Applying Role Colors:', JSON.stringify(dbSettings.role_colors, null, 2));
                         setRoleColors(dbSettings.role_colors);
                     } else {
                         console.log('[PlannerContext] No (or empty) role_colors in DB. Using defaults.');
