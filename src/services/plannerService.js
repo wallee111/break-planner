@@ -187,3 +187,44 @@ export const fetchLatestSchedule = async (date) => {
     }
     return data ? data.schedule_data : null;
 };
+
+// --- Settings ---
+
+export const fetchSettings = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+    if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching settings:', error);
+        return null;
+    }
+    return data;
+};
+
+export const updateSettings = async (updates) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    // Use upsert to handle both create and update
+    const { data, error } = await supabase
+        .from('settings')
+        .upsert({
+            user_id: user.id,
+            ...updates,
+            updated_at: new Date()
+        })
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error saving settings:', error);
+        return null;
+    }
+    return data;
+};

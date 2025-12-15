@@ -2,7 +2,11 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { INITIAL_EMPLOYEES, INITIAL_RULES, INITIAL_COVERAGE_RULES, INITIAL_ROLE_COLORS } from '../utils/initialData';
 import { INITIAL_ROSTER } from '../utils/rosterData';
 import { generateSchedule as genScheduleAlgo, validateSchedule as valScheduleAlgo } from '../utils/scheduler';
-import { fetchEmployees, createEmployee, updateEmployee as apiUpdateEmployee, deleteEmployee as apiDeleteEmployee, saveSchedule, fetchRoster, addToRoster as apiAddToRoster, updateRosterEmployee as apiUpdateRoster, deleteFromRoster as apiDeleteRoster } from '../services/plannerService';
+import {
+    fetchEmployees, createEmployee, updateEmployee, deleteEmployee,
+    fetchRoster, addToRoster, updateRosterEmployee, deleteFromRoster,
+    fetchSettings, updateSettings
+} from '../services/plannerService';
 import { useAuth } from './AuthContext';
 
 const PlannerContext = createContext();
@@ -22,10 +26,16 @@ export const PlannerProvider = ({ children }) => {
 
     const updateRules = (newRules) => {
         setRules(newRules);
+        if (user) {
+            updateSettings({ break_rules: newRules });
+        }
     };
 
     const updateCoverageRules = (newRules) => {
         setCoverageRules(newRules);
+        if (user) {
+            updateSettings({ coverage_rules: newRules });
+        }
     };
 
     // --- Supabase Integration ---
@@ -72,10 +82,29 @@ export const PlannerProvider = ({ children }) => {
                     }));
                     setRoster(mappedRoster);
                 } else {
+                    // Seed Roster (if empty)
                     setRoster([]);
                 }
 
-                // 3. Schedule (Load today's if exists - future improvement)
+                // 3. Settings (Rules & Colors)
+                const dbSettings = await fetchSettings();
+                if (dbSettings) {
+                    if (dbSettings.break_rules && dbSettings.break_rules.length > 0) {
+                        setRules(dbSettings.break_rules);
+                    }
+                    if (dbSettings.coverage_rules && dbSettings.coverage_rules.length > 0) {
+                        setCoverageRules(dbSettings.coverage_rules);
+                    }
+                    if (dbSettings.role_colors && Object.keys(dbSettings.role_colors).length > 0) {
+                        setRoleColors(dbSettings.role_colors);
+                    }
+                } else {
+                    // Initialize settings in DB if they don't exist? 
+                    // Or just lazy load. Let's just use defaults comfortably.
+                    console.log('No settings found, using defaults.');
+                }
+
+                // 4. Schedule (Load today's if exists - future improvement)
             } catch (err) {
                 console.error('Data load failed:', err);
             } finally {
@@ -251,7 +280,11 @@ export const PlannerProvider = ({ children }) => {
     };
 
     const updateRoleColor = (role, color) => {
-        setRoleColors(prev => ({ ...prev, [role]: color }));
+        const newColors = { ...roleColors, [role]: color };
+        setRoleColors(newColors);
+        if (user) {
+            updateSettings({ role_colors: newColors });
+        }
     };
 
     const value = {
