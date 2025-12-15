@@ -17,9 +17,20 @@ export const fetchEmployees = async () => {
 };
 
 export const createEmployee = async (employee) => {
-    const { data: { user } } = await supabase.auth.getUser();
+    alert('createEmployee() called'); // Temp: confirm function runs
 
-    if (!user) return null;
+    // Debug: surface auth info
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError) {
+        alert(`Supabase auth error: ${userError.message}`);
+        console.error('Error fetching user:', userError);
+        return null;
+    }
+
+    if (!user) {
+        alert('No Supabase user session found. Please log in.');
+        return null;
+    }
 
     const { data, error } = await supabase
         .from('employees')
@@ -28,9 +39,13 @@ export const createEmployee = async (employee) => {
         .single();
 
     if (error) {
+        alert(`Supabase insert error: ${error.message}`); // Temp: surface Supabase insert errors
         console.error('Error creating employee:', error);
         return null;
     }
+
+    // Debug: confirm success
+    alert(`Employee saved with id: ${data?.id || 'unknown'}`);
     return data;
 };
 
