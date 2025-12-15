@@ -81,7 +81,76 @@ export const deleteEmployee = async (id) => {
     return true;
 };
 
+// --- Roster ---
+
+export const fetchRoster = async () => {
+    const { data, error } = await supabase
+        .from('roster')
+        .select('*')
+        .order('name');
+
+    if (error) {
+        console.error('Error fetching roster:', error);
+        return [];
+    }
+    return data;
+};
+
+export const addToRoster = async (employee) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+        .from('roster')
+        .insert([{
+            name: employee.name,
+            default_role: employee.defaultRole || employee.default_role || 'Product Guide',
+            user_id: user.id
+        }])
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error adding to roster:', error);
+        return null;
+    }
+    return data;
+};
+
+export const updateRosterEmployee = async (id, updates) => {
+    const dbUpdates = {};
+    if (updates.name) dbUpdates.name = updates.name;
+    if (updates.defaultRole) dbUpdates.default_role = updates.defaultRole;
+
+    const { data, error } = await supabase
+        .from('roster')
+        .update(dbUpdates)
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error updating roster:', error);
+        return null;
+    }
+    return data;
+};
+
+export const deleteFromRoster = async (id) => {
+    const { error } = await supabase
+        .from('roster')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error deleting from roster:', error);
+        return false;
+    }
+    return true;
+};
+
 // --- Schedules ---
+
 
 export const saveSchedule = async (date, scheduleData) => {
     const { data: { user } } = await supabase.auth.getUser();
