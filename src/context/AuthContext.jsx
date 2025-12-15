@@ -49,7 +49,10 @@ export const AuthProvider = ({ children }) => {
 
     const signOut = async () => {
         const { error } = await supabase.auth.signOut();
-        if (error) throw error;
+        // Use loose check for 403 or message content to catch "AuthSessionMissingError"
+        if (error && error.status !== 403 && !error.message?.includes('session missing')) {
+            throw error;
+        }
     };
 
     const value = {
