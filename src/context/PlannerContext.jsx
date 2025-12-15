@@ -110,9 +110,120 @@ export const PlannerProvider = ({ children }) => {
         loadData();
     }, [user, authLoading]);
 
-    // ... (keep employees CRUD same) ...
-    // Note: User needs to verify where lines match in valid file. 
-    // I am skipping down to the roster functions.
+    // Helper to persist employee changes
+    const addEmployee = async (empData) => {
+        // Handle both (name, role) legacy calls if any, or object
+        let name, role, startTime, endTime;
+
+        if (typeof empData === 'string') {
+            name = empData;
+        } else {
+            name = empData.name;
+            role = empData.roles?.[0] || empData.default_role;
+            startTime = empData.startTime || '08:00';
+            endTime = empData.endTime || '17:00';
+        }
+
+        // Optimistic Update
+        const tempId = crypto.randomUUID();
+        const newEmp = {
+            id: tempId,
+            name,
+            roles: [role],
+            default_role: role,
+            startTime,
+            endTime
+        };
+        setEmployees(prev => [newEmp, ...prev]);
+
+        // DB Save
+        const saved = await createEmployee({
+            name,
+            roles: [role],
+            start_time: startTime,
+            end_time: endTime
+        });
+
+        if (saved) {
+            // Replace temp ID with real DB ID
+            setEmployees(prev => prev.map(e => e.id === tempId ? { ...saved, startTime, endTime } : e));
+            addToLog(`Added ${name} to team`, 'success');
+        } else {
+            // Revert optimistic update if failed
+            setEmployees(prev => prev.filter(e => e.id !== tempId));
+            addToLog(`Failed to save ${name}`, 'error');
+        }
+    };
+
+    const updateEmployee = async (id, updates) => {
+        // Optimistic
+        setEmployees(employees.map(emp => emp.id === id ? { ...emp, ...updates } : emp));
+
+        // DB
+        await apiUpdateEmployee(id, updates);
+        addToLog('Updated employee', 'success');
+    };
+
+    const removeEmployee = async (id) => {
+        // Optimistic
+        setEmployees(employees.filter(emp => emp.id !== id));
+
+        // DB
+        await apiDeleteEmployee(id);
+        addToLog('Removed employee', 'warning');
+    };
+
+    const [activityLog, setActivityLog] = useState([]);
+
+    const addToLog = (message, type = 'info') => {
+        const entry = {
+            id: crypto.randomUUID(),
+            timestamp: new Date(),
+            message,
+            type
+        };
+        setActivityLog(prev => [entry, ...prev]);
+    };
+
+    const updateSchedule = async (newSchedule, logAction = null) => {
+        // Optimistic
+        setSchedule(newSchedule);
+
+        if (logAction) {
+            console.log(`[Planner Action]: ${logAction} at ${new Date().toLocaleTimeString()}`);
+            addToLog(logAction, 'action');
+        }
+
+        // Real-time validation
+        const warnings = valScheduleAlgo(newSchedule, employees, coverageRules);
+        setValidationErrors(warnings);
+
+        if (warnings.length > 0 && logAction) {
+            addToLog(`Validation found ${warnings.length} issues`, 'warning');
+        }
+
+        // DB Save
+        const today = new Date().toISOString().split('T')[0];
+        await saveSchedule(today, newSchedule);
+    };
+
+    const validateNow = () => {
+        const warnings = valScheduleAlgo(schedule, employees, coverageRules);
+        setValidationErrors(warnings);
+
+        if (warnings.length === 0) {
+            addToLog('Manual Verification: Schedule is Valid', 'success');
+            return true;
+        } else {
+            addToLog(`Manual Verification: Found ${warnings.length} issues`, 'warning');
+            return false;
+        }
+    };
+
+    const generateSchedule = () => {
+        const newSchedule = genScheduleAlgo(employees, rules);
+        updateSchedule(newSchedule, 'Generated Schedule');
+    };
 
     const addToRoster = async (employee) => {
         // Optimistic

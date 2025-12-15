@@ -33,7 +33,7 @@ try {
         }
         if (import.meta.env.DEV) {
             const keyPreview = supabaseAnonKey.length > 12 ? `${supabaseAnonKey.slice(0, 12)}...` : supabaseAnonKey;
-            alert(`Supabase URL in use: ${supabaseUrl.slice(0, 50)}... | Key: ${keyPreview}`);
+            console.log(`Supabase URL: ${supabaseUrl} | Key: ${keyPreview}`);
         }
     } else {
         console.warn('Supabase URL/Key invalid or missing. Using fallback.');
