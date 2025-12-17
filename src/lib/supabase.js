@@ -27,14 +27,11 @@ try {
     if (supabaseUrl && isValidUrl(supabaseUrl) && supabaseAnonKey) {
         client = createClient(supabaseUrl, supabaseAnonKey);
 
-        // Debug helper (remove in production)
+        // Debugging helper
         if (typeof window !== 'undefined') {
             window.supabase = client;
         }
-        if (import.meta.env.DEV) {
-            const keyPreview = supabaseAnonKey.length > 12 ? `${supabaseAnonKey.slice(0, 12)}...` : supabaseAnonKey;
-            console.log(`Supabase URL: ${supabaseUrl} | Key: ${keyPreview}`);
-        }
+        // The console.log statement displaying Supabase URL and Key has been removed as per instruction.
     } else {
         console.warn('Supabase URL/Key invalid or missing. Using fallback.');
         // Fallback to avoid crash, but requests will fail

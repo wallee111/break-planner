@@ -30,6 +30,7 @@ export const createEmployee = async (employee) => {
         roles: employee.roles, // Schema check: text[] is correct
         start_time: employee.startTime || employee.start_time || '09:00',
         end_time: employee.endTime || employee.end_time || '17:00',
+        avatar_color: employee.avatarColor,
         user_id: user.id
     };
 
@@ -53,6 +54,7 @@ export const updateEmployee = async (id, updates) => {
     if (updates.roles !== undefined) dbPayload.roles = updates.roles;
     if (updates.startTime !== undefined) dbPayload.start_time = updates.startTime;
     if (updates.endTime !== undefined) dbPayload.end_time = updates.endTime;
+    if (updates.avatarColor !== undefined) dbPayload.avatar_color = updates.avatarColor;
 
     const { data, error } = await supabase
         .from('employees')
@@ -105,6 +107,7 @@ export const addToRoster = async (employee) => {
         .insert([{
             name: employee.name,
             default_role: employee.defaultRole || employee.default_role || 'Product Guide',
+            avatar_color: employee.avatarColor,
             user_id: user.id
         }])
         .select()
@@ -121,6 +124,7 @@ export const updateRosterEmployee = async (id, updates) => {
     const dbUpdates = {};
     if (updates.name) dbUpdates.name = updates.name;
     if (updates.defaultRole) dbUpdates.default_role = updates.defaultRole;
+    if (updates.avatarColor) dbUpdates.avatar_color = updates.avatarColor;
 
     const { data, error } = await supabase
         .from('roster')

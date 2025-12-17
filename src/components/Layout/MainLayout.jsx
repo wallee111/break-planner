@@ -3,12 +3,12 @@ import { Calendar, Users, Settings, BarChart2 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
 export const MainLayout = ({ children }) => {
-    const [activeTab, setActiveTab] = React.useState('setup');
+    const [activeTab, setActiveTab] = React.useState('schedule');
 
     const navItems = [
-        { id: 'setup', label: 'Daily Setup', icon: Users },
-        { id: 'rules', label: 'Parameters', icon: Settings },
         { id: 'schedule', label: 'Schedule', icon: Calendar },
+        { id: 'employees', label: 'Employees', icon: Users },
+        { id: 'rules', label: 'Parameters', icon: Settings },
         { id: 'profile', label: 'Profile', icon: Users },
     ];
 

@@ -42,9 +42,9 @@ export const INITIAL_EMPLOYEES = [
 ];
 
 export const INITIAL_RULES = [
-    { minHours: 0, maxHours: 5, breaks: [{ duration: 15, type: 'paid' }] },
-    { minHours: 5, maxHours: 7, breaks: [{ duration: 15, type: 'paid' }, { duration: 30, type: 'meal' }] },
-    { minHours: 7, maxHours: 24, breaks: [{ duration: 15, type: 'paid' }, { duration: 30, type: 'meal' }, { duration: 15, type: 'paid' }] },
+    { minHours: 0, maxHours: 5, paidBreaks: 1, unpaidBreaks: 0, paidDuration: 15, unpaidDuration: 0 },
+    { minHours: 5, maxHours: 7, paidBreaks: 1, unpaidBreaks: 1, paidDuration: 15, unpaidDuration: 30 },
+    { minHours: 7, maxHours: 24, paidBreaks: 2, unpaidBreaks: 1, paidDuration: 15, unpaidDuration: 30 },
 ];
 
 export const INITIAL_COVERAGE_RULES = [
@@ -53,8 +53,18 @@ export const INITIAL_COVERAGE_RULES = [
 ];
 
 export const INITIAL_ROLE_COLORS = {
-    'Manager': '#f87171', // Red-400
-    'Lead': '#fbbf24', // Amber-400
-    'Product Guide': '#34d399', // Emerald-400
-    'Associate': '#60a5fa', // Blue-400
+    'Product Guide': '#34d399', // emerald-400
+    'Lead': '#818cf8',         // indigo-400
+    'Manager': '#fbbf24',      // amber-400
+    'Associate': '#94a3b8'     // slate-400
 };
+
+export const INITIAL_STORE_HOURS = [
+    { day: 'Monday', isOpen: true, openTime: '09:00', closeTime: '17:00' },
+    { day: 'Tuesday', isOpen: true, openTime: '09:00', closeTime: '17:00' },
+    { day: 'Wednesday', isOpen: true, openTime: '09:00', closeTime: '17:00' },
+    { day: 'Thursday', isOpen: true, openTime: '09:00', closeTime: '17:00' },
+    { day: 'Friday', isOpen: true, openTime: '09:00', closeTime: '17:00' },
+    { day: 'Saturday', isOpen: true, openTime: '10:00', closeTime: '18:00' },
+    { day: 'Sunday', isOpen: false, openTime: '10:00', closeTime: '18:00' }
+];

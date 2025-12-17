@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS public.settings (
     break_rules JSONB DEFAULT '[]'::jsonb,
     coverage_rules JSONB DEFAULT '[]'::jsonb,
     role_colors JSONB DEFAULT '{}'::jsonb,
+    store_hours JSONB DEFAULT '[]'::jsonb,
+    view_range JSONB DEFAULT '{"start": 8, "end": 20}'::jsonb,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
