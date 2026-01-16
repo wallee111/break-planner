@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
     INITIAL_EMPLOYEES, INITIAL_RULES, INITIAL_COVERAGE_RULES,
     INITIAL_ROLE_COLORS, INITIAL_STORE_HOURS
@@ -49,7 +49,10 @@ export const PlannerProvider = ({ children }) => {
 
     // UI State
     const [viewRange, setViewRange] = useState({ start: 8, end: 20 });
-    const updateViewRange = (range) => setViewRange(range);
+    const updateViewRange = (range) => {
+        setViewRange(range);
+        if (user) api.updateSettings({ view_range: range });
+    };
 
     // Meta
     const [validationErrors, setValidationErrors] = useState([]);
@@ -109,6 +112,7 @@ export const PlannerProvider = ({ children }) => {
                     if (dbSettings.break_rules?.length) setRules(dbSettings.break_rules);
                     if (dbSettings.coverage_rules?.length) setCoverageRules(dbSettings.coverage_rules);
                     if (dbSettings.store_hours?.length) setStoreHours(dbSettings.store_hours);
+                    if (dbSettings.view_range) setViewRange(dbSettings.view_range);
 
                     // Only override colors if DB has valid data
                     if (dbSettings.role_colors && Object.keys(dbSettings.role_colors).length > 0) {
@@ -282,6 +286,91 @@ export const PlannerProvider = ({ children }) => {
         if (user) api.updateSettings({ role_colors: newColors });
     };
 
+    // --- Actions: Roles ---
+
+    const addRole = (roleName, color = '#94a3b8') => {
+        if (roleColors[roleName]) return; // Exists
+        // const newColors = { ...roleColors, [roleName]: color }; // Unused
+        updateRoleColor(roleName, color); // Re-use existing sync
+    };
+
+    const renameRole = async (oldName, newName) => {
+        if (!oldName || !newName || oldName === newName) return;
+        if (roleColors[newName]) return; // Prevent duplicate
+
+        // 1. Update Colors
+        const { [oldName]: color, ...rest } = roleColors;
+        const newColors = { ...rest, [newName]: color };
+        setRoleColors(newColors);
+        if (user) api.updateSettings({ role_colors: newColors });
+
+        // 2. Update Active Employees
+        const updatedEmployees = employees.map(emp => ({
+            ...emp,
+            roles: emp.roles.map(r => r === oldName ? newName : r),
+            default_role: emp.default_role === oldName ? newName : emp.default_role
+        }));
+        setEmployees(updatedEmployees);
+
+        // 3. Update Roster
+        const updatedRoster = roster.map(r => ({
+            ...r,
+            roles: r.roles ? r.roles.map(role => role === oldName ? newName : role) : [],
+            defaultRole: r.defaultRole === oldName ? newName : r.defaultRole,
+            default_role: r.default_role === oldName ? newName : r.default_role
+        }));
+        setRoster(updatedRoster);
+
+        // 4. Update Coverage Rules
+        const updatedRules = coverageRules.map(rule => {
+            // Handle legacy 'role'
+            let ruleRole = rule.role === oldName ? newName : rule.role;
+
+            // Handle new 'roles' array
+            let ruleRoles = rule.roles ? rule.roles.map(r => r === oldName ? newName : r) : undefined;
+
+            return { ...rule, role: ruleRole, roles: ruleRoles };
+        });
+        updateCoverageRules(updatedRules);
+
+        addToLog(`Renamed role ${oldName} to ${newName}`, 'action');
+    };
+
+    const deleteRole = async (roleName) => {
+        // 1. Update Colors
+        const { [roleName]: _, ...newColors } = roleColors;
+        setRoleColors(newColors);
+        if (user) api.updateSettings({ role_colors: newColors });
+
+        // 2. Remove from Employees
+        const updatedEmployees = employees.map(emp => ({
+            ...emp,
+            roles: emp.roles.filter(r => r !== roleName),
+            default_role: emp.default_role === roleName ? null : emp.default_role
+        }));
+        setEmployees(updatedEmployees);
+
+        // 3. Remove from Roster
+        const updatedRoster = roster.map(r => ({
+            ...r,
+            roles: r.roles ? r.roles.filter(role => role !== roleName) : [],
+            defaultRole: r.defaultRole === roleName ? null : r.defaultRole,
+            default_role: r.default_role === roleName ? null : r.default_role
+        }));
+        setRoster(updatedRoster);
+
+        // 4. Update Coverage Rules
+        const updatedRules = coverageRules.map(rule => {
+            const newRoles = rule.roles ? rule.roles.filter(r => r !== roleName) : [];
+            const newRole = rule.role === roleName ? 'Any' : rule.role;
+            const finalRoles = (rule.roles && newRoles.length === 0) ? ['Any'] : newRoles;
+            return { ...rule, role: newRole, roles: finalRoles };
+        });
+        updateCoverageRules(updatedRules);
+
+        addToLog(`Deleted role ${roleName}`, 'warning');
+    };
+
     // --- Actions: Schedule ---
 
     const updateSchedule = async (newSchedule, logAction = null) => {
@@ -317,7 +406,9 @@ export const PlannerProvider = ({ children }) => {
 
     // --- Context Value ---
 
-    const value = useMemo(() => ({
+    // --- Context Value ---
+
+    const value = {
         employees,
         addEmployee,
         updateEmployee,
@@ -342,13 +433,13 @@ export const PlannerProvider = ({ children }) => {
         deleteFromRoster,
         roleColors,
         updateRoleColor,
+        addRole,
+        renameRole,
+        deleteRole,
         activityLog,
         validateNow,
         isLoading
-    }), [
-        employees, rules, coverageRules, storeHours, schedule, validationErrors,
-        roster, roleColors, activityLog, isLoading, user
-    ]);
+    };
 
     return (
         <PlannerContext.Provider value={value}>

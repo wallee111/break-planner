@@ -5,6 +5,35 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Trash2, Plus, User, Briefcase } from 'lucide-react';
 
+const AVATAR_COLORS = [
+    '#ef4444', // Red
+    '#f97316', // Orange
+    '#f59e0b', // Amber
+    '#84cc16', // Lime
+    '#10b981', // Emerald
+    '#06b6d4', // Cyan
+    '#3b82f6', // Blue
+    '#6366f1', // Indigo
+    '#8b5cf6', // Violet
+    '#d946ef', // Fuchsia
+    '#f43f5e', // Rose
+    '#64748b'  // Slate
+];
+
+const ColorPicker = ({ value, onChange }) => (
+    <div className="flex flex-wrap gap-2 mt-2">
+        {AVATAR_COLORS.map(c => (
+            <button
+                key={c}
+                type="button"
+                onClick={() => onChange(c)}
+                className={`w-6 h-6 rounded-full border-2 transition-all ${value === c ? 'border-indigo-600 scale-110' : 'border-transparent hover:scale-105'}`}
+                style={{ backgroundColor: c }}
+            />
+        ))}
+    </div>
+);
+
 export const RosterManager = () => {
     const { roster, addToRoster, deleteFromRoster, updateRosterEmployee } = usePlanner();
     const [isAdding, setIsAdding] = useState(false);
@@ -32,36 +61,6 @@ export const RosterManager = () => {
             setEditingId(null);
         }
     };
-
-    // --- Color Picker ---
-    const AVATAR_COLORS = [
-        '#ef4444', // Red
-        '#f97316', // Orange
-        '#f59e0b', // Amber
-        '#84cc16', // Lime
-        '#10b981', // Emerald
-        '#06b6d4', // Cyan
-        '#3b82f6', // Blue
-        '#6366f1', // Indigo
-        '#8b5cf6', // Violet
-        '#d946ef', // Fuchsia
-        '#f43f5e', // Rose
-        '#64748b'  // Slate
-    ];
-
-    const ColorPicker = ({ value, onChange }) => (
-        <div className="flex flex-wrap gap-2 mt-2">
-            {AVATAR_COLORS.map(c => (
-                <button
-                    key={c}
-                    type="button"
-                    onClick={() => onChange(c)}
-                    className={`w-6 h-6 rounded-full border-2 transition-all ${value === c ? 'border-indigo-600 scale-110' : 'border-transparent hover:scale-105'}`}
-                    style={{ backgroundColor: c }}
-                />
-            ))}
-        </div>
-    );
 
     return (
         <Card title="Employee Roster" actions={<Button onClick={() => setIsAdding(!isAdding)} variant={isAdding ? "secondary" : "primary"}><Plus className="w-4 h-4" /> {isAdding ? 'Cancel' : 'Add Person'}</Button>}>

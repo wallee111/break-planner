@@ -66,63 +66,7 @@ export const TimelineView = () => {
     newSchedule[empScheduleIndex].breaks = updatedBreaks;
     updateSchedule(newSchedule, 'Merged Breaks');
   };
-  const { employees, schedule, generateSchedule, updateSchedule, validationErrors, roleColors, activityLog, validateNow, removeEmployee, addEmployee, roster, updateEmployee, rules, coverageRules, viewRange, updateViewRange } = usePlanner();
-
-  const confirmMerge = () => {
-    if (!mergeCandidate) return;
-    const { empId, draggedBreak, targetBreak, totalDuration } = mergeCandidate;
-
-    const currentSchedule = scheduleRef.current;
-    const empScheduleIndex = currentSchedule.findIndex(s => s.employeeId === empId);
-
-    if (empScheduleIndex === -1) {
-      setMergeCandidate(null);
-      return;
-    }
-
-    const newSchedule = [...currentSchedule];
-    const empBreaks = [...newSchedule[empScheduleIndex].breaks];
-
-    const getTime = (d) => (d instanceof Date ? d : parse(d, 'HH:mm', new Date())).getTime();
-
-    // Sort parts to ensure chronological order regardless of drag direction
-    const parts = [draggedBreak, targetBreak].sort((a, b) => getTime(a.startTime) - getTime(b.startTime));
-    const newBreakStart = parts[0].startTime;
-
-    // Determine End Time
-    const startObj = newBreakStart instanceof Date ? newBreakStart : parse(newBreakStart, 'HH:mm', new Date());
-    const newEndTime = addMinutes(startObj, totalDuration);
-
-    const mergedBreak = {
-      id: `merged-${Date.now()}`,
-      type: 'merged',
-      startTime: newBreakStart,
-      endTime: format(newEndTime, 'HH:mm'), // Standardize to string if possible, or keep consistent? Context uses mixed. Let's keep strict.
-      // Wait, updateSchedule expects specific format? 
-      // Existing `calculateBreaks` returns Strings usually. 
-      // Let's ensure consistency. If `newBreakStart` is string, keep it.
-      // `endTime` should probably be formatted if start is string.
-      // Actually, let's look at `TimelineView` usage. It seems to handle both.
-      // Safest is to keep what `updateEmployee` does.
-      duration: totalDuration,
-      subBreaks: parts
-    };
-
-    // Ideally we ensure startTime is formatted if it was string
-    if (typeof newBreakStart === 'string') {
-      mergedBreak.endTime = format(newEndTime, 'HH:mm');
-    } else {
-      mergedBreak.endTime = newEndTime;
-    }
-
-    const updatedBreaks = empBreaks.filter(b => b.id !== draggedBreak.id && b.id !== targetBreak.id);
-    updatedBreaks.push(mergedBreak);
-    updatedBreaks.sort((a, b) => getTime(a.startTime) - getTime(b.startTime));
-
-    newSchedule[empScheduleIndex].breaks = updatedBreaks;
-    updateSchedule(newSchedule, 'Merged Breaks');
-    setMergeCandidate(null);
-  };
+  const { employees, schedule, generateSchedule, updateSchedule, validationErrors, roleColors, activityLog, validateNow, removeEmployee, addEmployee, roster, updateEmployee, rules, coverageRules, viewRange } = usePlanner();
 
   const unlinkBreak = (empId, breakId) => {
     const currentSchedule = scheduleRef.current;
@@ -192,7 +136,6 @@ export const TimelineView = () => {
   const [hoveredBreakId, setHoveredBreakId] = useState(null);
   const [sortByTime, setSortByTime] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [mergeCandidate, setMergeCandidate] = useState(null);
   const [swapCandidate, setSwapCandidate] = useState(null);
   const addMenuRef = useRef(null);
   const swapTimeoutRef = useRef(null);
@@ -212,7 +155,11 @@ export const TimelineView = () => {
       if (!b.startTime) return -1;
       const tA = parse(a.startTime, 'HH:mm', new Date());
       const tB = parse(b.startTime, 'HH:mm', new Date());
-      return tA - tB;
+
+      const vA = isNaN(tA.getTime()) ? Infinity : tA.getTime();
+      const vB = isNaN(tB.getTime()) ? Infinity : tB.getTime();
+
+      return vA - vB;
     });
   }, [employees, sortByTime]);
 
@@ -299,8 +246,13 @@ export const TimelineView = () => {
   const handleCreateMouseDown = (e, empId, existingSchedule) => {
     if (existingSchedule) return;
     const rect = e.currentTarget.getBoundingClientRect();
+
+    // Dynamically calculate minWidth based on the actual element width
+    // This handles cases where state containers drift from DOM reality
+    const localMinWidth = rect.width / (totalHours * 60);
+
     const relativeX = e.clientX - rect.left;
-    const clickMinutes = (relativeX / minWidth);
+    const clickMinutes = (relativeX / localMinWidth);
     const startTime = addMinutes(setHours(setMinutes(new Date(), 0), startHour), clickMinutes);
     let snappedStart = new Date(Math.round(startTime.getTime() / (15 * 60000)) * (15 * 60000));
 
@@ -317,12 +269,16 @@ export const TimelineView = () => {
       startX: e.clientX,
       currentX: e.clientX,
       startTime: snappedStart,
-      tempEndTime: addMinutes(snappedStart, 60)
+      tempEndTime: addMinutes(snappedStart, 60),
+      minWidth: localMinWidth // Store it for use in global listeners
     });
   };
 
   const handleBreakMouseDown = (e, brk, empId) => {
     e.preventDefault(); e.stopPropagation();
+    // Inherit global minWidth or try to calc? 
+    // For breaks/moves, using the global minWidth (state) is usually "okay" but less precise than local.
+    // Ideally we'd get parent width.
     setDragState({
       type: 'MOVE_BREAK',
       breakId: brk.id,
@@ -330,7 +286,8 @@ export const TimelineView = () => {
       initialX: e.clientX,
       currentX: e.clientX,
       originalStartTime: brk.startTime,
-      duration: brk.duration
+      duration: brk.duration,
+      minWidth: minWidth // Snapshot current simple calc
     });
   };
 
@@ -342,7 +299,8 @@ export const TimelineView = () => {
       startX: e.clientX,
       currentX: e.clientX,
       originalStart: start,
-      originalEnd: end
+      originalEnd: end,
+      minWidth: minWidth // Snapshot
     });
   };
 
@@ -354,7 +312,8 @@ export const TimelineView = () => {
       startX: e.clientX,
       currentX: e.clientX,
       originalStart: start,
-      originalEnd: end
+      originalEnd: end,
+      minWidth: minWidth // Snapshot
     });
   };
 
@@ -384,12 +343,13 @@ export const TimelineView = () => {
       const startHourVal = viewRangeRef.current.start;
       const endHourVal = viewRangeRef.current.end;
 
-      const minDate = setHours(setMinutes(startOfDay(new Date()), 0), startHourVal);
       const maxDate = setHours(setMinutes(startOfDay(new Date()), 0), endHourVal);
+
+      const dragMinWidth = currentDrag.minWidth || minWidth;
 
       if (currentDrag.type === 'CREATE_SHIFT') {
         const diffPx = e.clientX - currentDrag.startX;
-        const diffMins = diffPx / minWidth;
+        const diffMins = diffPx / dragMinWidth;
         const rawEnd = addMinutes(currentDrag.startTime, diffMins);
         let newEnd = roundToNearest15(rawEnd);
         if (newEnd > maxDate) newEnd = maxDate;
@@ -412,8 +372,18 @@ export const TimelineView = () => {
       const minDate = setHours(setMinutes(startOfDay(new Date()), 0), startHourVal);
       const maxDate = setHours(setMinutes(startOfDay(new Date()), 0), endHourVal);
 
+      const dragMinWidth = currentDrag.minWidth || minWidth;
+
       if (currentDrag.type === 'CREATE_SHIFT') {
         const { startTime, tempEndTime, empId } = currentDrag;
+
+        // Safety Check: Ensure valid Dates (Prevent White Screen Crash)
+        if (isNaN(startTime.getTime()) || isNaN(tempEndTime.getTime())) {
+          console.error('Invalid date detected in CREATE_SHIFT', startTime, tempEndTime);
+          setDragState(null);
+          return;
+        }
+
         // Double check bounds
         if (tempEndTime > startTime && tempEndTime <= maxDate) {
           const breaks = calculateBreaks(fmt(startTime), fmt(tempEndTime), rulesRef.current);
@@ -427,7 +397,7 @@ export const TimelineView = () => {
       }
       else if (currentDrag.type === 'MOVE_SHIFT') {
         const diffPx = e.clientX - currentDrag.startX;
-        const diffMins = diffPx / minWidth;
+        const diffMins = diffPx / dragMinWidth;
 
         // Absolute Snap Strategy:
         // Calculate raw target start, then snap it.
@@ -447,6 +417,12 @@ export const TimelineView = () => {
           newStart = addMinutes(newEnd, -duration);
         }
 
+        // Validation
+        if (isNaN(newStart.getTime()) || isNaN(newEnd.getTime())) {
+          setDragState(null);
+          return;
+        }
+
         // Only update if valid and changed
         if (newStart >= minDate && newEnd <= maxDate && newStart.getTime() !== currentDrag.originalStart.getTime()) {
           const breaks = calculateBreaks(fmt(newStart), fmt(newEnd), rulesRef.current);
@@ -460,13 +436,18 @@ export const TimelineView = () => {
       }
       else if (currentDrag.type === 'RESIZE_START') {
         const diffPx = e.clientX - currentDrag.startX;
-        const diffMins = diffPx / minWidth;
+        const diffMins = diffPx / dragMinWidth;
 
         const rawStart = addMinutes(currentDrag.originalStart, diffMins);
         let newStart = roundToNearest15(rawStart);
 
         // Clamp
         if (newStart < minDate) newStart = minDate;
+
+        if (isNaN(newStart.getTime())) {
+          setDragState(null);
+          return;
+        }
 
         if (newStart < currentDrag.originalEnd && newStart.getTime() !== currentDrag.originalStart.getTime()) {
           const breaks = calculateBreaks(fmt(newStart), fmt(currentDrag.originalEnd), rulesRef.current);
@@ -479,13 +460,18 @@ export const TimelineView = () => {
       }
       else if (currentDrag.type === 'RESIZE_END') {
         const diffPx = e.clientX - currentDrag.startX;
-        const diffMins = diffPx / minWidth;
+        const diffMins = diffPx / dragMinWidth;
 
         const rawEnd = addMinutes(currentDrag.originalEnd, diffMins);
         let newEnd = roundToNearest15(rawEnd);
 
         // Clamp
         if (newEnd > maxDate) newEnd = maxDate;
+
+        if (isNaN(newEnd.getTime())) {
+          setDragState(null);
+          return;
+        }
 
         if (newEnd > currentDrag.originalStart && newEnd.getTime() !== currentDrag.originalEnd.getTime()) {
           const breaks = calculateBreaks(fmt(currentDrag.originalStart), fmt(newEnd), rulesRef.current);
@@ -499,10 +485,15 @@ export const TimelineView = () => {
       else if (currentDrag.type === 'MOVE_BREAK') {
         // ... (Breaks constrained to shift, not timeline directly, though implicitly yes)
         const dX = e.clientX - currentDrag.initialX;
-        const diffMins = dX / minWidth;
+        const diffMins = dX / dragMinWidth;
 
         const rawStart = addMinutes(currentDrag.originalStartTime, diffMins);
         const newStartTime = roundToNearest15(rawStart);
+
+        if (isNaN(newStartTime.getTime())) {
+          setDragState(null);
+          return;
+        }
 
         if (newStartTime.getTime() !== currentDrag.originalStartTime.getTime()) {
           const currentSchedule = scheduleRef.current;
@@ -516,36 +507,7 @@ export const TimelineView = () => {
               const draggedBreak = empBreaks[bIdx];
               const newEndTime = addMinutes(newStartTime, currentDrag.duration);
 
-              // 1. MERGE DETECTION
-              const newStartStr = format(newStartTime, 'HH:mm');
-              const newEndStr = format(newEndTime, 'HH:mm');
-              const getVal = (v) => (v instanceof Date ? format(v, 'HH:mm') : v);
 
-              const mergeTarget = empBreaks.find(b => {
-                if (b.id === currentDrag.breakId) return false;
-
-                const tEndStr = getVal(b.endTime);
-                const tStartStr = getVal(b.startTime);
-
-                // Strict Adjacency Check (Strings)
-                return tEndStr === newStartStr || tStartStr === newEndStr;
-              });
-
-              if (mergeTarget) {
-                // Trigger Merge UI
-                const durationTotal = draggedBreak.duration + mergeTarget.duration;
-                setMergeCandidate({
-                  empId: currentDrag.empId,
-                  draggedBreak,
-                  targetBreak: mergeTarget,
-                  totalDuration: durationTotal,
-                  proposedNewStart: newStartTime // Store where we dropped it for context if we need it
-                });
-                setDragState(null);
-                return;
-              }
-
-              // 2. SWAP DETECTION (Existing Logic)
               const targetBreakIndex = empBreaks.findIndex(b =>
                 b.id !== currentDrag.breakId &&
                 Math.abs(differenceInMinutes(b.startTime, newStartTime)) < 15
@@ -609,11 +571,20 @@ export const TimelineView = () => {
 
     // Sync text with external value prop on mount/update
     useEffect(() => {
+      if (value === undefined || value === null || isNaN(value)) {
+        setText('');
+        return;
+      }
       let h = value;
       const isNextDay = h >= 24;
       if (h >= 24) h -= 24;
 
       const d = setHours(startOfDay(new Date()), h);
+      if (isNaN(d.getTime())) {
+        setText('');
+        return;
+      }
+
       let str = format(d, 'h:mm a');
       if (isNextDay) str += ' (+1)';
       setText(str);
@@ -627,7 +598,6 @@ export const TimelineView = () => {
 
       if (match) {
         let h = parseInt(match[1]);
-        const m = match[2] ? parseInt(match[2]) : 0;
         const period = match[3]; // a, p, am, pm
 
         if (period && (period.startsWith('p'))) {
@@ -696,23 +666,6 @@ export const TimelineView = () => {
         </div>
 
         <div className="flex gap-2 items-center flex-wrap">
-          <div className="flex items-center gap-2 mr-4 bg-slate-50 p-1.5 rounded-lg border border-slate-100">
-            <div className="flex items-center gap-2 px-1">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Start</span>
-              <TimeInput
-                value={viewRange.start}
-                onChange={(v) => updateViewRange({ ...viewRange, start: v })}
-              />
-            </div>
-            <div className="w-px h-4 bg-slate-200"></div>
-            <div className="flex items-center gap-2 px-1">
-              <span className="text-xs font-semibold text-slate-500 uppercase">End</span>
-              <TimeInput
-                value={viewRange.end}
-                minVal={viewRange.start}
-                onChange={(v) => updateViewRange({ ...viewRange, end: v })}
-              />         </div>
-          </div>
           <Button onClick={() => updateSchedule([], 'Cleared')} variant="outline" className="text-red-700">Clear</Button>
           <Button onClick={generateSchedule} className="bg-indigo-600 text-white flex items-center gap-2"><Play className="w-4 h-4 fill-current" /> Generate</Button>
           <Button onClick={handleValidate} variant="secondary">Validate</Button>
@@ -735,7 +688,6 @@ export const TimelineView = () => {
 
         {/* Current Time Indicator */}
         {(() => {
-          const h = currentTime.getHours() + currentTime.getMinutes() / 60;
           // Handle overnight wrap if needed, or simplistically
           // If view is 8-20, and time is 21, don't show.
           // If view is 8-20, and time is 9, show.
@@ -807,37 +759,42 @@ export const TimelineView = () => {
             let shiftStart = emp.startTime ? parse(emp.startTime, 'HH:mm', new Date()) : null;
             let shiftEnd = emp.endTime ? parse(emp.endTime, 'HH:mm', new Date()) : null;
 
-            if (shiftStart && shiftEnd && shiftEnd < shiftStart) {
+            // Validate dates immediately
+            const isValidShift = shiftStart && shiftEnd && !isNaN(shiftStart.getTime()) && !isNaN(shiftEnd.getTime());
+
+            if (!isValidShift) {
+              shiftStart = null;
+              shiftEnd = null;
+            } else if (shiftEnd < shiftStart) {
               shiftEnd = addMinutes(shiftEnd, 24 * 60);
             }
 
             // Calculate position stats
             let visualStart = shiftStart, visualEnd = shiftEnd;
-            let isDraggingShift = false;
 
-            if (dragState && dragState.empId === emp.id) {
+            if (isValidShift && dragState && dragState.empId === emp.id) {
               if (dragState.type === 'MOVE_SHIFT') {
-                isDraggingShift = true;
                 const diffPx = dragState.currentX - dragState.startX;
-                const diffMins = Math.round((diffPx / minWidth) / 15) * 15;
+                const minWidthVal = dragState.minWidth || minWidth; // Safe fallback
+                const diffMins = Math.round((diffPx / minWidthVal) / 15) * 15;
                 visualStart = addMinutes(dragState.originalStart, diffMins);
                 visualEnd = addMinutes(dragState.originalEnd, diffMins);
               } else if (dragState.type === 'RESIZE_START') {
-                isDraggingShift = true;
                 const diffPx = dragState.currentX - dragState.startX;
-                const diffMins = Math.round((diffPx / minWidth) / 15) * 15;
+                const minWidthVal = dragState.minWidth || minWidth;
+                const diffMins = Math.round((diffPx / minWidthVal) / 15) * 15;
                 visualStart = addMinutes(dragState.originalStart, diffMins);
               } else if (dragState.type === 'RESIZE_END') {
-                isDraggingShift = true;
                 const diffPx = dragState.currentX - dragState.startX;
-                const diffMins = Math.round((diffPx / minWidth) / 15) * 15;
+                const minWidthVal = dragState.minWidth || minWidth;
+                const diffMins = Math.round((diffPx / minWidthVal) / 15) * 15;
                 visualEnd = addMinutes(dragState.originalEnd, diffMins);
               }
             }
 
             // Render Props
-            const startLeft = visualStart ? getLeftPos(visualStart) : 0;
-            const durationMins = (visualStart && visualEnd) ? differenceInMinutes(visualEnd, visualStart) : 0;
+            const startLeft = (visualStart && !isNaN(visualStart.getTime())) ? getLeftPos(visualStart) : 0;
+            const durationMins = (visualStart && visualEnd && !isNaN(visualStart.getTime()) && !isNaN(visualEnd.getTime())) ? differenceInMinutes(visualEnd, visualStart) : 0;
             const width = (durationMins / 60) * hourWidth;
             const durationHrs = Math.round((durationMins / 60) * 100) / 100;
             const roleColor = roleColors?.[emp.roles[0]] || '#f1f5f9';
@@ -970,7 +927,7 @@ export const TimelineView = () => {
                         onMouseDown={(e) => handleShiftResizeStart(e, emp.id, 'END', shiftStart, shiftEnd)}
                       ></div>
                       {/* Shift Details Tooltip */}
-                      <div className="hidden group-hover/shift:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 text-white text-[10px] p-2 rounded shadow-lg z-50 w-max pointer-events-none">
+                      <div className={`${dragState ? 'hidden' : 'hidden group-hover/shift:block'} absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-slate-800 text-white text-[10px] p-2 rounded shadow-lg z-50 w-max pointer-events-none`}>
                         <div className="font-bold border-b border-slate-600 pb-1 mb-1 text-center">
                           {emp.startTime} - {emp.endTime}
                         </div>
@@ -1078,6 +1035,8 @@ export const TimelineView = () => {
                               const currentStartMs = sTime.getTime();
                               const currentEndMs = sEnd.getTime();
 
+                              let nextBreakObj = null;
+
                               for (let other of sortedOthers) {
                                 const oStart = other.startTime instanceof Date ? other.startTime : parse(other.startTime, 'HH:mm', new Date());
                                 const oEnd = other.endTime instanceof Date ? other.endTime : parse(other.endTime, 'HH:mm', new Date());
@@ -1087,6 +1046,7 @@ export const TimelineView = () => {
                                 }
                                 if (oStart.getTime() >= currentEndMs && oStart.getTime() < nStart.getTime()) {
                                   nStart = oStart;
+                                  nextBreakObj = other;
                                 }
                               }
 
@@ -1107,24 +1067,66 @@ export const TimelineView = () => {
 
                               // Look ahead for potential merge partner
                               let linkButton = null;
-                              if (idx < sortedOthers.length - 1) {
-                                const nextBreak = sortedOthers[idx + 1];
-                                const rbTime = nextBreak.startTime instanceof Date ? nextBreak.startTime : parse(nextBreak.startTime, 'HH:mm', new Date());
-                                const lbEnd = bEnd;
+                              if (nextBreakObj) {
+                                const rbTime = nextBreakObj.startTime instanceof Date ? nextBreakObj.startTime : parse(nextBreakObj.startTime, 'HH:mm', new Date());
+                                const lbEnd = sEnd; // Use sEnd (dragged end)
 
                                 const gapMins = differenceInMinutes(rbTime, lbEnd);
 
                                 if (gapMins <= 30 && gapMins >= -5) { // Allow slight overlap or tight gap
-                                  const gapCenter = getLeftPos(lbEnd) + (gapMins * minWidth) / 2;
+                                  // NOTE: getLeftPos is for timeline absolute position.
+                                  // Inside this relative div, existing breaks use `visualLeft`.
+                                  // We need the position *relative* to the start of the row container or the break container?
+                                  // The breaks are absolute inside `relative flex-1`.
+                                  // `visualLeft` of current break is `(sTime - shiftStart)`. 
+                                  // gapCenter should be relative to `sTime`? No, the button is absolute.
+                                  // The button logic in original code used `getLeftPos(lbEnd)`.
+                                  // `getLeftPos` uses absolute time -> pixel from left of chart.
+                                  // `visualLeft` uses diff from `shiftStart`.
+                                  // The parent container is `relative flex-1 h-full`.
+                                  // Inside it, breaks are absolute.
+                                  // `getLeftPos` assumes global timeline start. 
+                                  // Let's check `getLeftPos` definition. It usually is (time - startHour) * width.
+                                  // `shiftStart` is likely NOT the timeline start.
+                                  // The parent container seems to span the whole timeline width?
+                                  // Line 979: `<div className="relative flex-1 h-full cursor-crosshair">`
+                                  // Line 1184 (original): `style={{ left: gapCenter }}`.
+                                  // If `gapCenter` is calculated using `getLeftPos`, it is correct IF the parent is the full timeline width container.
+                                  // Let's trust `getLeftPos` if it was working before, but wait.
+                                  // The `visualLeft` for breaks is `differenceInMinutes(brk.startTime, shiftStart) * minWidth`.
+                                  // This implies the container starts at `shiftStart`?
+                                  // NO. Line 988: `left: getLeftPos(dragState.startTime)`.
+                                  // This implies the container matches the timeline global coordinate system?
+                                  // Let's check the container.
+                                  // Line 978: `onMouseDown`.
+                                  // Line 989: Ghost uses `getLeftPos`.
+                                  // Breaking render uses `visualLeft`.
+                                  // `startLeft` (line 889) uses `getLeftPos`.
+                                  // Wait, `startLeft` is used for the Shift Block (line 1005).
+                                  // The BREAKS are inside the Shift Block (line 1002)?
+                                  // Line 1045: Breaks are inside the Shift Block div.
+                                  // The Shift Block div is positioned at `startLeft` (absolute).
+                                  // So the coordinate system for breaks is relative to the *Shift Block*, not the Timeline.
+                                  // So `left: 0` inside the shift block = Start of the Shift.
+                                  // Original code `getLeftPos(lbEnd)` would be wrong if it returns global position!
+                                  // `getLeftPos` returns global px.
+                                  // If breaks are inside the shift block, `left` should be relative to shift start.
+                                  // `visualLeft = differenceInMinutes(brk.startTime, shiftStart) * minWidth`. Correct.
+                                  // So `gapCenter` logic in original code was potentially buggy if it used global `getLeftPos`.
+                                  // But `linkButton` was `absolute top-1/2`.
+                                  // Let's use relative math:
+                                  // Gap center relative to shift start = (sEnd - shiftStart) + gap/2.
+
+                                  const pxFromShiftStart = (differenceInMinutes(lbEnd, shiftStart) * minWidth) + (gapMins * minWidth) / 2;
 
                                   linkButton = (
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleMergeBreaks(emp.id, brk, nextBreak);
+                                        handleMergeBreaks(emp.id, brk, nextBreakObj);
                                       }}
                                       className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-50 bg-white border border-indigo-200 rounded-full p-1 shadow-sm hover:scale-110 hover:border-indigo-500 transition-all group/link"
-                                      style={{ left: gapCenter }}
+                                      style={{ left: pxFromShiftStart }}
                                       title="Merge with next break"
                                     >
                                       <Link className="w-3 h-3 text-indigo-400 group-hover/link:text-indigo-600" />

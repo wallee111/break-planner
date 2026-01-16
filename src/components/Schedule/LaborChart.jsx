@@ -122,39 +122,6 @@ export const LaborChart = ({ employees, schedule, startHour, endHour, rules = []
         return { data: chartData, ticks: tickValues, domain: [startMs, endMs] };
     }, [employees, schedule, startHour, endHour, allRoles]);
 
-    const CustomTooltip = ({ active, payload, label }) => {
-        if (active && payload && payload.length) {
-            const data = payload[0].payload;
-            // Don't show tooltip for gaps (total 0 and effectively 0 duration in perception)
-            if (data.total === 0 && data.onBreak === 0) return null;
-
-            return (
-                <div className="bg-slate-800 text-white text-xs rounded-md shadow-xl p-3 border border-slate-700 min-w-[120px] z-50">
-                    <div className="font-bold mb-2 text-center border-b border-slate-600 pb-1">{data.time}</div>
-                    <div className="space-y-1.5">
-                        <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-1.5 opacity-90">
-                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div>
-                                <span>Active</span>
-                            </div>
-                            <span className="font-mono font-medium">{data.total}</span>
-                        </div>
-                        {data.onBreak > 0 && (
-                            <div className="flex justify-between items-center text-amber-200/90">
-                                <div className="flex items-center gap-1.5">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
-                                    <span>On Break</span>
-                                </div>
-                                <span className="font-mono font-medium">{data.onBreak}</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        }
-        return null;
-    };
-
     if (!employees || employees.length === 0) return null;
 
     // Filter relevant rules
@@ -230,4 +197,37 @@ export const LaborChart = ({ employees, schedule, startHour, endHour, rules = []
             </ResponsiveContainer>
         </div>
     );
+};
+
+const CustomTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+        const data = payload[0].payload;
+        // Don't show tooltip for gaps (total 0 and effectively 0 duration in perception)
+        if (data.total === 0 && data.onBreak === 0) return null;
+
+        return (
+            <div className="bg-slate-800 text-white text-xs rounded-md shadow-xl p-3 border border-slate-700 min-w-[120px] z-50">
+                <div className="font-bold mb-2 text-center border-b border-slate-600 pb-1">{data.time}</div>
+                <div className="space-y-1.5">
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-1.5 opacity-90">
+                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div>
+                            <span>Active</span>
+                        </div>
+                        <span className="font-mono font-medium">{data.total}</span>
+                    </div>
+                    {data.onBreak > 0 && (
+                        <div className="flex justify-between items-center text-amber-200/90">
+                            <div className="flex items-center gap-1.5">
+                                <div className="w-1.5 h-1.5 rounded-full bg-amber-400"></div>
+                                <span>On Break</span>
+                            </div>
+                            <span className="font-mono font-medium">{data.onBreak}</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+    return null;
 };

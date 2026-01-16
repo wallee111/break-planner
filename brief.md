@@ -142,11 +142,3 @@ Primary User Flow
 	6.	Adjusts breaks if needed (warnings guide changes)
 	7.	Publishes/prints for staff.
 
-
-
-
-	G\£BXf$A99EP?39Dfk)y.
-
-	I've actually also never deployed an app using supabase and vercel before, so am actually not sure what the steps are to deploy the latest changes. Can you take me through these steps?
-
-I have only used firebase for database and hosting, so I am just used to running firebase deploy, and using the link. But it seems different from vercel and supabase. 

@@ -1,4 +1,4 @@
-import { addMinutes, differenceInMinutes, parse, format, addHours, isWithinInterval, roundToNearestMinutes } from 'date-fns';
+import { addMinutes, differenceInMinutes, parse, format, isWithinInterval, roundToNearestMinutes } from 'date-fns';
 
 const roundToNearest15 = (date) => roundToNearestMinutes(date, { nearestTo: 15, roundingMethod: 'round' });
 
@@ -38,8 +38,16 @@ const findRule = (rules, durationHours) => {
 };
 
 export const calculateBreaks = (startTimeStr, endTimeStr, rules) => {
+    if (!startTimeStr || !endTimeStr) return [];
+
+    // Safety check for generic "Invalid Date" inputs
     const start = parse(startTimeStr, 'HH:mm', new Date());
     let end = parse(endTimeStr, 'HH:mm', new Date());
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        console.warn('calculateBreaks received invalid times:', startTimeStr, endTimeStr);
+        return [];
+    }
 
     // Handle overnight
     if (end < start) {
@@ -114,8 +122,13 @@ const getTimeKey = (date) => format(date, 'HH:mm');
 
 // Helper to get time range for shift
 const getShiftRange = (emp) => {
+    if (!emp.startTime || !emp.endTime) return null;
+
     const start = parse(emp.startTime, 'HH:mm', new Date());
     let end = parse(emp.endTime, 'HH:mm', new Date());
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+
     if (end < start) end = addMinutes(end, 24 * 60);
     return { start, end };
 };
@@ -296,20 +309,41 @@ export const generateSchedule = (employees, rules, coverageRules = []) => {
     // Actually, sorting by LENGTH of shift descending might be better to place big blocks first.
     // For now, let's stick to Start Time to be intuitive.
     const sortedEmployees = [...employees].sort((a, b) => {
-        const tA = parse(a.startTime, 'HH:mm', new Date()).getTime();
-        const tB = parse(b.startTime, 'HH:mm', new Date()).getTime();
+        // Safe Parse Helper
+        const getSafeTime = (timeStr) => {
+            if (!timeStr) return Infinity; // Push to bottom
+            const d = parse(timeStr, 'HH:mm', new Date());
+            return isNaN(d.getTime()) ? Infinity : d.getTime();
+        };
+
+        const tA = getSafeTime(a.startTime);
+        const tB = getSafeTime(b.startTime);
+
         if (tA !== tB) return tA - tB;
         return getPriority(b.roles) - getPriority(a.roles); // Higher priority first
     });
 
     // Populate initial coverage
     sortedEmployees.forEach(emp => {
-        const { start, end } = getShiftRange(emp);
-        coverageMap.increment(start, end, emp.roles);
+        const range = getShiftRange(emp);
+        if (range) {
+            coverageMap.increment(range.start, range.end, emp.roles);
+        }
     });
 
     return sortedEmployees.map(emp => {
-        const { start, end } = getShiftRange(emp);
+        const range = getShiftRange(emp);
+
+        // Handle invalid range gracefully
+        if (!range) {
+            return {
+                employeeId: emp.id,
+                employeeName: emp.name,
+                breaks: []
+            };
+        }
+
+        const { start, end } = range;
         const shiftDurationHours = differenceInMinutes(end, start) / 60;
 
         // Find Rule
@@ -443,11 +477,9 @@ export const validateSchedule = (schedule, employees, coverageRules, storeHours)
     // 2. Iterate through timeline in 15 minute increments
     let currentTime = minStart;
     while (currentTime < maxEnd) {
-        // Calculate active staff
-        const activeStaff = {
-            total: 0,
-            byRole: {}
-        };
+        // Calculate active staff list
+        const activeEmployees = [];
+        // const activeRoleCounts = {}; // Keep legacy simple counts for quick 'Any' check or single role perf
 
         schedule.forEach(schedItem => {
             const emp = empMap.get(schedItem.employeeId);
@@ -460,27 +492,14 @@ export const validateSchedule = (schedule, employees, coverageRules, storeHours)
             if (currentTime >= shiftStart && currentTime < shiftEnd) {
                 // Check if on break
                 if (!isOnBreak(currentTime, schedItem.breaks)) {
-                    activeStaff.total++;
-                    emp.roles.forEach(role => {
-                        activeStaff.byRole[role] = (activeStaff.byRole[role] || 0) + 1;
-                    });
+                    activeEmployees.push(emp);
                 }
             }
         });
 
         // 3. Check rules
         coverageRules.forEach(rule => {
-            // New: Check Store Hours for this day
-            // Assumption: Validation runs on "Current" day or generic. 
-            // Since we don't have a specific date passed in except maybe minStart, 
-            // let's assume validSchedule is for "Today" or we check the day of the week of `currentTime`.
-
-            const currentDayIndex = currentTime.getDay(); // 0 = Sun
-            // Map 0 (Sun) -> 6, 1 (Mon) -> 0... wait. 
-            // days array in config: Mon, Tue... Sat, Sun.
-            // Mon=0, Tue=1... Sun=6.
-            // Date.getDay(): Sun=0, Mon=1...
-            // Mapper: (day + 6) % 7.
+            const currentDayIndex = currentTime.getDay();
             const configDayIndex = (currentDayIndex + 6) % 7;
 
             let isStoreOpen = true;
@@ -498,20 +517,37 @@ export const validateSchedule = (schedule, employees, coverageRules, storeHours)
             }
 
             if (isStoreOpen && rule.type === 'min_staff') {
+                // Normalize Rule
+                const targetRoles = rule.roles || (rule.role ? [rule.role] : ['Any']);
+                const operator = rule.operator || 'OR';
+
                 let currentCount = 0;
-                if (rule.role === 'Any') {
-                    currentCount = activeStaff.total;
+
+                if (targetRoles.includes('Any')) {
+                    currentCount = activeEmployees.length;
                 } else {
-                    currentCount = activeStaff.byRole[rule.role] || 0;
+                    // Filter active employees based on complex logic
+                    currentCount = activeEmployees.filter(emp => {
+                        const empRoles = emp.roles || [];
+                        if (operator === 'AND') {
+                            // Must have ALL target roles
+                            return targetRoles.every(r => empRoles.includes(r));
+                        } else {
+                            // Must have AT LEAST ONE target role
+                            return targetRoles.some(r => empRoles.includes(r));
+                        }
+                    }).length;
                 }
 
                 if (currentCount < rule.count) {
-                    // Deduplicate warnings slightly by only adding if unique time/rule combo or simplify
-                    // For now, just add a generic warning for the time block
                     const timeStr = format(currentTime, 'HH:mm');
+
+                    let roleLabel = targetRoles.join(operator === 'AND' ? ' & ' : ' / ');
+                    if (targetRoles.length > 3) roleLabel = `${targetRoles.length} Roles`;
+
                     warnings.push({
                         time: timeStr,
-                        message: `Low coverage for ${rule.role}: Found ${currentCount}, needed ${rule.count}`
+                        message: `Low coverage: Found ${currentCount} matching [${roleLabel}], needed ${rule.count}`
                     });
                 }
             }
