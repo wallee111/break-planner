@@ -63,7 +63,7 @@ export const calculateBreaks = (startTimeStr, endTimeStr, rules) => {
 
     let breaks = [];
 
-    const count = rule.paidBreaks + rule.unpaidBreaks;
+    const count = (rule.paidBreaks || 0) + (rule.unpaidBreaks || 0);
     if (count === 0) return [];
 
     const segment = totalMinutes / (count + 1);
@@ -71,29 +71,41 @@ export const calculateBreaks = (startTimeStr, endTimeStr, rules) => {
     let breakIndex = 0;
 
     // Add Paid Breaks
-    for (let i = 0; i < rule.paidBreaks; i++) {
+    const paidCount = rule.paidBreaks || 0;
+    const paidDur = rule.paidDuration || 15; // Default safe duration
+
+    for (let i = 0; i < paidCount; i++) {
         breakIndex++;
         let breakStart = addMinutes(start, Math.round(segment * breakIndex));
         breakStart = roundToNearest15(breakStart);
+
+        if (isNaN(breakStart.getTime())) continue; // Skip invalid calculations
+
         breaks.push({
             id: crypto.randomUUID(),
             startTime: breakStart,
-            endTime: addMinutes(breakStart, rule.paidDuration),
-            duration: rule.paidDuration,
+            endTime: addMinutes(breakStart, paidDur),
+            duration: paidDur,
             type: 'paid'
         });
     }
 
     // Add Unpaid Breaks
-    for (let i = 0; i < rule.unpaidBreaks; i++) {
+    const unpaidCount = rule.unpaidBreaks || 0;
+    const unpaidDur = rule.unpaidDuration || 30; // Default safe duration
+
+    for (let i = 0; i < unpaidCount; i++) {
         breakIndex++;
         let breakStart = addMinutes(start, Math.round(segment * breakIndex));
         breakStart = roundToNearest15(breakStart);
+
+        if (isNaN(breakStart.getTime())) continue;
+
         breaks.push({
             id: crypto.randomUUID(),
             startTime: breakStart,
-            endTime: addMinutes(breakStart, rule.unpaidDuration),
-            duration: rule.unpaidDuration,
+            endTime: addMinutes(breakStart, unpaidDur),
+            duration: unpaidDur,
             type: 'unpaid'
         });
     }

@@ -386,13 +386,24 @@ export const TimelineView = () => {
 
         // Double check bounds
         if (tempEndTime > startTime && tempEndTime <= maxDate) {
-          const breaks = calculateBreaks(fmt(startTime), fmt(tempEndTime), rulesRef.current);
-          updateEmployee(empId, { startTime: fmt(startTime), endTime: fmt(tempEndTime) });
-          const newSched = [...scheduleRef.current];
-          const idx = newSched.findIndex(s => s.employeeId === empId);
-          if (idx >= 0) newSched[idx] = { ...newSched[idx], breaks };
-          else newSched.push({ employeeId: empId, breaks });
-          updateSchedule(newSched, 'Created Shift');
+          try {
+            const breaks = calculateBreaks(fmt(startTime), fmt(tempEndTime), rulesRef.current);
+            updateEmployee(empId, { startTime: fmt(startTime), endTime: fmt(tempEndTime) });
+            const newSched = [...scheduleRef.current];
+            const idx = newSched.findIndex(s => s.employeeId === empId);
+            if (idx >= 0) newSched[idx] = { ...newSched[idx], breaks };
+            else newSched.push({ employeeId: empId, breaks });
+            updateSchedule(newSched, 'Created Shift');
+          } catch (err) {
+            console.error('Error creating shift:', err);
+            // Fallback: Create empty shift if breaks fail
+            updateEmployee(empId, { startTime: fmt(startTime), endTime: fmt(tempEndTime) });
+            const newSched = [...scheduleRef.current];
+            const idx = newSched.findIndex(s => s.employeeId === empId);
+            if (idx >= 0) newSched[idx] = { ...newSched[idx], breaks: [] };
+            else newSched.push({ employeeId: empId, breaks: [] });
+            updateSchedule(newSched, 'Created Shift (No Breaks)');
+          }
         }
       }
       else if (currentDrag.type === 'MOVE_SHIFT') {
