@@ -20,15 +20,14 @@ const team = [
     { id: 'will', name: 'Will', roles: ['Product Guide'], startTime: '14:00', endTime: '19:00' }
 ];
 
-// storeHours = null → validate the whole day regardless of weekday
 const byKind = (warnings, kind) => warnings.filter(w => w.kind === kind);
 const fmt = (ws) => ws.map(w => `${w.time} ${w.message}`).join(' | ');
 
 console.log('\n— generator honours coverage rules —');
 const blind = generateSchedule(team, INITIAL_RULES); // old call: no coverage rules
 const aware = generateSchedule(team, INITIAL_RULES, INITIAL_COVERAGE_RULES);
-const blindWarnings = validateSchedule(blind, team, INITIAL_COVERAGE_RULES, null);
-const awareWarnings = validateSchedule(aware, team, INITIAL_COVERAGE_RULES, null);
+const blindWarnings = validateSchedule(blind, team, INITIAL_COVERAGE_RULES);
+const awareWarnings = validateSchedule(aware, team, INITIAL_COVERAGE_RULES);
 console.log(`  (blind: ${blindWarnings.length} warnings, coverage-aware: ${awareWarnings.length})`);
 check('coverage-aware generation causes no more break conflicts than blind generation',
     byKind(awareWarnings, 'break').length <= byKind(blindWarnings, 'break').length,
@@ -54,7 +53,7 @@ const fullTeam = [
     { id: 'g2', name: 'G2', roles: ['Product Guide'], startTime: '09:00', endTime: '17:00' }
 ];
 const fullSched = generateSchedule(fullTeam, INITIAL_RULES, INITIAL_COVERAGE_RULES);
-const fullWarnings = validateSchedule(fullSched, fullTeam, INITIAL_COVERAGE_RULES, null);
+const fullWarnings = validateSchedule(fullSched, fullTeam, INITIAL_COVERAGE_RULES);
 check('two managers + two guides → zero warnings', fullWarnings.length === 0, fmt(fullWarnings));
 
 console.log('\n— validation counts string break times (merged / restored breaks) —');
@@ -69,7 +68,7 @@ const stringBreaks = [
 ];
 let threw = null;
 let stringWarnings = [];
-try { stringWarnings = validateSchedule(stringBreaks, pair, INITIAL_COVERAGE_RULES, null); } catch (e) { threw = e.message; }
+try { stringWarnings = validateSchedule(stringBreaks, pair, INITIAL_COVERAGE_RULES); } catch (e) { threw = e.message; }
 check('no crash on HH:mm string break times', threw === null, threw);
 check('string-time break is counted as off the floor (12:00 and 12:15 flagged)',
     ['12:00', '12:15'].every(t => stringWarnings.some(w => w.time === t && w.kind === 'break')),

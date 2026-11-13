@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
     INITIAL_EMPLOYEES, INITIAL_RULES, INITIAL_COVERAGE_RULES,
-    INITIAL_ROLE_COLORS, INITIAL_STORE_HOURS
+    INITIAL_ROLE_COLORS
 } from '../utils/initialData';
 import { INITIAL_ROSTER } from '../utils/rosterData';
 import { generateSchedule as genScheduleAlgo, validateSchedule as valScheduleAlgo } from '../utils/scheduler';
@@ -51,7 +51,6 @@ export const PlannerProvider = ({ children }) => {
     const [rules, setRules] = useState(INITIAL_RULES);
     const [coverageRules, setCoverageRules] = useState(INITIAL_COVERAGE_RULES);
     const [roleColors, setRoleColors] = useState(INITIAL_ROLE_COLORS);
-    const [storeHours, setStoreHours] = useState(INITIAL_STORE_HOURS);
     const [storeFeedUrl, setStoreFeedUrl] = useState('');
 
     // UI State
@@ -68,8 +67,8 @@ export const PlannerProvider = ({ children }) => {
     // Coverage validation — DERIVED from current state, never stored. Each
     // warning is { time, kind: 'staffing' | 'break', message }.
     const validationErrors = useMemo(
-        () => valScheduleAlgo(schedule, employees, coverageRules, storeHours),
-        [schedule, employees, coverageRules, storeHours]
+        () => valScheduleAlgo(schedule, employees, coverageRules),
+        [schedule, employees, coverageRules]
     );
 
     // --- Logging ---
@@ -134,7 +133,6 @@ export const PlannerProvider = ({ children }) => {
                 if (dbSettings) {
                     if (dbSettings.break_rules?.length) setRules(dbSettings.break_rules);
                     if (dbSettings.coverage_rules?.length) setCoverageRules(dbSettings.coverage_rules);
-                    if (dbSettings.store_hours?.length) setStoreHours(dbSettings.store_hours);
                     if (dbSettings.view_range) setViewRange(dbSettings.view_range);
 
                     // Only override colors if DB has valid data
@@ -428,11 +426,6 @@ export const PlannerProvider = ({ children }) => {
         if (user) api.updateSettings({ coverage_rules: newRules });
     };
 
-    const updateStoreHours = (newHours) => {
-        setStoreHours(newHours);
-        if (user) api.updateSettings({ store_hours: newHours });
-    };
-
     const updateRoleColor = (role, color) => {
         const newColors = { ...roleColors, [role]: color };
         setRoleColors(newColors);
@@ -561,8 +554,6 @@ export const PlannerProvider = ({ children }) => {
         updateRules,
         coverageRules,
         updateCoverageRules,
-        storeHours,
-        updateStoreHours,
         viewRange,
         updateViewRange,
         schedule,

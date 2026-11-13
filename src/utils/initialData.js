@@ -59,12 +59,3 @@ export const INITIAL_ROLE_COLORS = {
     'Associate': '#94a3b8'     // slate-400
 };
 
-export const INITIAL_STORE_HOURS = [
-    { day: 'Monday', isOpen: true, openTime: '09:00', closeTime: '17:00' },
-    { day: 'Tuesday', isOpen: true, openTime: '09:00', closeTime: '17:00' },
-    { day: 'Wednesday', isOpen: true, openTime: '09:00', closeTime: '17:00' },
-    { day: 'Thursday', isOpen: true, openTime: '09:00', closeTime: '17:00' },
-    { day: 'Friday', isOpen: true, openTime: '09:00', closeTime: '17:00' },
-    { day: 'Saturday', isOpen: true, openTime: '10:00', closeTime: '18:00' },
-    { day: 'Sunday', isOpen: false, openTime: '10:00', closeTime: '18:00' }
-];

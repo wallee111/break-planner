@@ -4,7 +4,6 @@ import { MainLayout } from './components/Layout/MainLayout';
 import { EmployeeList } from './components/Setup/EmployeeList';
 import { EmployeeManager } from './components/Employees/EmployeeManager';
 import { RosterManager } from './components/Setup/RosterManager';
-import { StoreHoursConfig } from './components/Setup/StoreHoursConfig';
 import { BreakRuleConfig } from './components/Setup/BreakRuleConfig';
 import { CoverageRuleConfig } from './components/Setup/CoverageRuleConfig';
 import { RoleColorConfig } from './components/Setup/RoleColorConfig';
@@ -40,7 +39,6 @@ const ProtectedApp = () => {
             case 'rules':
               return (
                 <div className="space-y-6">
-                  <StoreHoursConfig />
                   <BreakRuleConfig />
                   <CoverageRuleConfig />
                   <RoleColorConfig />

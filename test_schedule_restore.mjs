@@ -36,8 +36,8 @@ check('break ids/types/durations preserved',
         return b.id === o.id && b.type === o.type && b.duration === o.duration;
     })));
 check('validation of restored schedule matches the original',
-    JSON.stringify(validateSchedule(restored, team, INITIAL_COVERAGE_RULES, null)) ===
-    JSON.stringify(validateSchedule(original, team, INITIAL_COVERAGE_RULES, null)));
+    JSON.stringify(validateSchedule(restored, team, INITIAL_COVERAGE_RULES)) ===
+    JSON.stringify(validateSchedule(original, team, INITIAL_COVERAGE_RULES)));
 
 console.log('\n— schedule saved on a previous day —');
 const yesterdayIso = JSON.parse(JSON.stringify([{ employeeId: 'g', breaks: [{ id: 'b', type: 'paid', duration: 15,

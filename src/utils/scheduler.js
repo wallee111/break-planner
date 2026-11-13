@@ -481,7 +481,7 @@ const isOnBreak = (time, breaks) => {
     });
 };
 
-export const validateSchedule = (schedule, employees, coverageRules, storeHours) => {
+export const validateSchedule = (schedule, employees, coverageRules) => {
     const warnings = [];
 
     if (!schedule || schedule.length === 0) return warnings;
@@ -525,26 +525,10 @@ export const validateSchedule = (schedule, employees, coverageRules, storeHours)
             }
         });
 
-        // 3. Check rules
+        // 3. Check rules (across the full span of scheduled shifts — if people
+        // are scheduled, the store is open; store-hours gating was removed)
         coverageRules.forEach(rule => {
-            const currentDayIndex = currentTime.getDay();
-            const configDayIndex = (currentDayIndex + 6) % 7;
-
-            let isStoreOpen = true;
-            if (storeHours) {
-                const dayConfig = storeHours[configDayIndex];
-                if (dayConfig && !dayConfig.isOpen) {
-                    isStoreOpen = false;
-                } else if (dayConfig) {
-                    // Check time range
-                    const timeStr = format(currentTime, 'HH:mm');
-                    if (timeStr < dayConfig.openTime || timeStr >= dayConfig.closeTime) {
-                        isStoreOpen = false;
-                    }
-                }
-            }
-
-            if (isStoreOpen && rule.type === 'min_staff') {
+            if (rule.type === 'min_staff') {
                 // Normalize Rule
                 const targetRoles = rule.roles || (rule.role ? [rule.role] : ['Any']);
                 const operator = rule.operator || 'OR';
