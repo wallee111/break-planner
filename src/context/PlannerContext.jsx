@@ -255,8 +255,10 @@ export const PlannerProvider = ({ children }) => {
             }
         }
 
-        await api.updateRosterEmployee(id, updates);
+        const saved = await api.updateRosterEmployee(id, updates);
         addToLog('Updated roster', 'success');
+        // Return the DB write result (null on failure) so callers can react
+        return saved;
     };
 
     const deleteFromRoster = async (id) => {

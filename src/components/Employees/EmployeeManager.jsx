@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { usePlanner } from '../../context/PlannerContext';
-import { Plus, Trash2, Edit2, Save, X, User, Clock, Briefcase, ArrowUp, ArrowDown, Link2, Check } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, User, Clock, Briefcase, ArrowUp, ArrowDown, Link2, Check, AlertTriangle } from 'lucide-react';
 import { Button } from '../ui/Button';
 
 import { HexColorPicker } from 'react-colorful';
@@ -59,6 +59,7 @@ const FeedCell = ({ feedUrl, onSave }) => {
     const [draft, setDraft] = useState('');
     const [touched, setTouched] = useState(false);
     const [justSaved, setJustSaved] = useState(false);
+    const [saveError, setSaveError] = useState(false);
 
     const saved = feedUrl || '';
     // Show the saved value until the user starts typing; no state-sync effect
@@ -67,7 +68,13 @@ const FeedCell = ({ feedUrl, onSave }) => {
 
     const save = async () => {
         if (!dirty) return;
-        await onSave(value.trim());
+        const ok = await onSave(value.trim());
+        if (!ok) {
+            // Save failed (DB error, offline, RLS) — do NOT pretend it worked
+            setSaveError(true);
+            setTimeout(() => setSaveError(false), 5000);
+            return;
+        }
         setTouched(false);
         setJustSaved(true);
         setTimeout(() => setJustSaved(false), 2000);
@@ -91,6 +98,8 @@ const FeedCell = ({ feedUrl, onSave }) => {
             />
             {justSaved ? (
                 <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+            ) : saveError ? (
+                <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" title="Save failed — check your connection and try again" />
             ) : dirty ? (
                 <button onClick={save} className="text-indigo-500 hover:text-indigo-700 shrink-0" title="Save link">
                     <Save className="w-4 h-4" />
@@ -123,9 +132,10 @@ export const EmployeeManager = () => {
         }));
     };
 
-    // Persist a WIW calendar link pasted into the feed column
+    // Persist a WIW calendar link pasted into the feed column.
+    // Returns the context result so the cell can show a failure state.
     const handleSaveFeed = async (id, url) => {
-        await updateRosterEmployee(id, { feedUrl: url });
+        return await updateRosterEmployee(id, { feedUrl: url });
     };
 
     const sortedRoster = [...roster].sort((a, b) => {
