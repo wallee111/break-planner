@@ -129,3 +129,6 @@ dist
 # Calendar feed files — contain private schedule data, never commit
 *.ics
 *.ical
+
+# Supabase CLI local state (project ref, CLI version) — never commit
+supabase/.temp/
