@@ -167,11 +167,14 @@ export const PlannerProvider = ({ children }) => {
         });
 
         if (saved) {
-            setEmployees(prev => prev.map(e => e.id === tempId ? { ...saved, startTime, endTime } : e));
+            const finalEmp = { ...saved, startTime, endTime, avatarColor };
+            setEmployees(prev => prev.map(e => e.id === tempId ? finalEmp : e));
             addToLog(`Added ${name} to team`, 'success');
+            return finalEmp;
         } else {
             setEmployees(prev => prev.filter(e => e.id !== tempId));
             addToLog(`Failed to save ${name}`, 'error');
+            return null;
         }
     };
 
@@ -291,6 +294,7 @@ export const PlannerProvider = ({ children }) => {
         let updated = 0;
         let off = 0;
         const errors = [];
+        const syncedEmployees = []; // final employee objects to auto-schedule
 
         for (const { employee, shifts, error } of results) {
             if (error) {
@@ -314,9 +318,10 @@ export const PlannerProvider = ({ children }) => {
                     startTime: shift.startTime,
                     endTime: shift.endTime
                 });
+                syncedEmployees.push({ ...existing, roles: [role], startTime: shift.startTime, endTime: shift.endTime });
                 updated++;
             } else {
-                await addEmployee({
+                const newEmp = await addEmployee({
                     name: employee.name,
                     roles: [role],
                     default_role: role,
@@ -324,8 +329,26 @@ export const PlannerProvider = ({ children }) => {
                     endTime: shift.endTime,
                     avatarColor: employee.avatarColor
                 });
-                added++;
+                if (newEmp) {
+                    syncedEmployees.push(newEmp);
+                    added++;
+                }
             }
+        }
+
+        // Auto-place shift blocks: the timeline only renders a shift block for
+        // employees that have a schedule entry, so generate breaks for the
+        // synced employees and merge into the existing schedule (preserving
+        // manually adjusted entries for everyone else).
+        if (syncedEmployees.length > 0) {
+            const genEntries = genScheduleAlgo(syncedEmployees, rules);
+            const merged = [...schedule];
+            for (const entry of genEntries) {
+                const idx = merged.findIndex(s => s.employeeId === entry.employeeId);
+                if (idx >= 0) merged[idx] = entry;
+                else merged.push(entry);
+            }
+            await updateSchedule(merged, 'Auto-scheduled synced shifts');
         }
 
         const summary = `When I Work sync (${dateStr}): ${added} added, ${updated} updated, ${off} off, ${errors.length} error(s)`;
