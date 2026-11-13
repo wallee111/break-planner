@@ -6,12 +6,11 @@
 // stored per roster member in the database (roster.feed_url), never in code.
 //
 // CORS: When I Work's calendar endpoint does not send CORS headers, so a
-// direct browser fetch fails. fetchIcs() therefore:
-//   1. tries a direct fetch first (works under Node/tests, and if WIW ever
-//      adds CORS), then
-//   2. falls back to a same-origin proxy path `/wiw-proxy/<token>.ics`,
-//      served by the Vite dev server in dev and the Supabase Edge Function
-//      `wiw-proxy` in production.
+// direct browser fetch always fails. fetchIcs() therefore:
+//   - in the browser: goes straight to the proxy `<base>/<token>.ics`,
+//     where <base> is VITE_WIW_PROXY_URL (production: the Supabase Edge
+//     Function `wiw-proxy`) or `/wiw-proxy` (dev: the Vite proxy);
+//   - outside the browser (Node tests): fetches the feed directly.
 // ============================================================================
 
 import { parseIcs, extractRoleFromSummary, toLocalHHmm } from '../utils/ics.js';
@@ -59,14 +58,19 @@ export const fetchIcs = async (feedUrl) => {
     const url = normalizeFeedUrl(feedUrl);
     if (!url) throw new Error('No calendar feed URL provided');
 
-    // 1. Direct — works outside the browser (Node/tests) or if CORS is ever allowed
-    try {
-        const res = await fetch(url);
-        if (res.ok) return assertIcsBody(await res.text());
-        if (res.status === 404) throw new Error('Feed not found — check the calendar link');
-    } catch (e) {
-        if (/not found|revoked/i.test(e.message)) throw e;
-        // Otherwise fall through to the proxy (likely a CORS failure)
+    // 1. Direct — only outside the browser (Node/tests). In a browser When I
+    // Work's missing CORS headers make this fail every time, and the blocked
+    // request prints a red CORS error in the console on every sync.
+    const inBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
+    if (!inBrowser) {
+        try {
+            const res = await fetch(url);
+            if (res.ok) return assertIcsBody(await res.text());
+            if (res.status === 404) throw new Error('Feed not found — check the calendar link');
+        } catch (e) {
+            if (/not found|revoked/i.test(e.message)) throw e;
+            // Otherwise fall through to the proxy
+        }
     }
 
     // 2. Same-origin proxy (Vite dev server / Supabase edge function).
