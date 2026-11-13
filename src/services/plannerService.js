@@ -195,6 +195,26 @@ export const fetchLatestSchedule = async (date) => {
     return data ? data.schedule_data : null;
 };
 
+/**
+ * The user's most recently saved schedule, regardless of date — what the
+ * planner restores on load. RLS limits rows to the signed-in user.
+ * Returns { date, schedule_data } or null.
+ */
+export const fetchMostRecentSchedule = async () => {
+    const { data, error } = await supabase
+        .from('schedules')
+        .select('date, schedule_data, created_at')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (error) {
+        console.error('Error fetching most recent schedule:', error);
+        return null;
+    }
+    return data;
+};
+
 // --- Settings ---
 
 export const fetchSettings = async () => {

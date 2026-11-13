@@ -48,7 +48,9 @@ export const TimelineView = () => {
     rules,
     coverageRules,
     viewRange,
-    syncFromWhenIWork
+    syncFromWhenIWork,
+    planDate,
+    setPlanDate
   } = usePlanner();
 
   // ==========================================================================
@@ -80,8 +82,10 @@ export const TimelineView = () => {
   const [containerWidth, setContainerWidth] = useState(1000);
   const [selectedBreak, setSelectedBreak] = useState(null); // { empId, breakId }
 
-  // When I Work sync state
-  const [syncDate, setSyncDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  // When I Work sync state (the date itself is the shared planDate in context —
+  // it's also the date the schedule is saved under and restored with)
+  const syncDate = planDate;
+  const setSyncDate = setPlanDate;
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null); // { type, message }
 

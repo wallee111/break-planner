@@ -6,6 +6,7 @@ import {
 import { INITIAL_ROSTER } from '../utils/rosterData';
 import { generateSchedule as genScheduleAlgo, validateSchedule as valScheduleAlgo } from '../utils/scheduler';
 import { syncRosterForDate, syncStoreFeedForDate } from '../services/wheniworkSync';
+import { reviveSchedule, toLocalDateKey } from '../utils/scheduleSerialization';
 import * as api from '../services/plannerService';
 import { useAuth } from './AuthContext';
 
@@ -42,6 +43,9 @@ export const PlannerProvider = ({ children }) => {
     const [employees, setEmployees] = useState(INITIAL_EMPLOYEES);
     const [roster, setRoster] = useState(INITIAL_ROSTER);
     const [schedule, setSchedule] = useState([]);
+    // The calendar day the timeline is planning (local YYYY-MM-DD). Drives the
+    // WIW sync date and the date schedules are saved under.
+    const [planDate, setPlanDate] = useState(() => toLocalDateKey());
 
     // Settings
     const [rules, setRules] = useState(INITIAL_RULES);
@@ -95,10 +99,11 @@ export const PlannerProvider = ({ children }) => {
             setIsLoading(true);
             try {
                 // Load critical data in parallel
-                const [dbEmployees, dbRoster, dbSettings] = await Promise.all([
+                const [dbEmployees, dbRoster, dbSettings, dbSchedule] = await Promise.all([
                     api.fetchEmployees(),
                     api.fetchRoster(),
-                    api.fetchSettings() // assume safe to fail? kept behavior similar to original
+                    api.fetchSettings(), // assume safe to fail? kept behavior similar to original
+                    api.fetchMostRecentSchedule()
                 ]);
 
                 // 1. Employees
@@ -114,6 +119,15 @@ export const PlannerProvider = ({ children }) => {
                     setRoster(dbRoster.map(normalizeRosterItem));
                 } else {
                     setRoster([]);
+                }
+
+                // 2b. Last saved schedule — restore it (set state directly, NOT
+                // via updateSchedule, so loading doesn't write a new version).
+                // Breaks come back from JSON as strings and are re-anchored onto
+                // today as time-of-day (see scheduleSerialization.js).
+                if (dbSchedule?.schedule_data) {
+                    setSchedule(reviveSchedule(dbSchedule.schedule_data));
+                    if (dbSchedule.date) setPlanDate(dbSchedule.date);
                 }
 
                 // 3. Settings
@@ -523,8 +537,9 @@ export const PlannerProvider = ({ children }) => {
         // from the latest schedule, team and rules on every change, so it can't
         // go stale or get "stuck" after the underlying problem is fixed.
 
-        const today = new Date().toISOString().split('T')[0];
-        await api.saveSchedule(today, newSchedule);
+        // Saved under the local planning date (was a UTC date, which filed
+        // evening schedules under tomorrow).
+        await api.saveSchedule(planDate, newSchedule);
     };
 
     const generateSchedule = () => {
@@ -559,6 +574,8 @@ export const PlannerProvider = ({ children }) => {
         schedule,
         updateSchedule,
         generateSchedule,
+        planDate,
+        setPlanDate,
         validationErrors,
         roster,
         addToRoster,

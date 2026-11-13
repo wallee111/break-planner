@@ -34,6 +34,7 @@ npm run build
 npm run lint
 node test_ics.mjs   # verify ICS parsing against a saved feed sample
 node test_validation.mjs   # scheduler + coverage validation regression tests
+node test_schedule_restore.mjs   # saved schedules restore exactly on load
 npm run check:db    # verify every migration is applied to the database
 ```
 
