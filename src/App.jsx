@@ -15,11 +15,11 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginScreen } from './components/Auth/LoginScreen';
 
 const ProtectedApp = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, passwordResetPending } = useAuth();
 
   if (loading) return null;
 
-  if (!user) {
+  if (!user || passwordResetPending) {
     return <LoginScreen />;
   }
 
