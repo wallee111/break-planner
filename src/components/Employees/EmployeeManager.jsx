@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { usePlanner } from '../../context/PlannerContext';
-import { Plus, Trash2, Edit2, Save, X, User, Clock, Briefcase, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, User, Clock, Briefcase, ArrowUp, ArrowDown, Link2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 
 import { HexColorPicker } from 'react-colorful';
@@ -237,13 +237,24 @@ export const EmployeeManager = () => {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     {editingId === emp.id ? (
-                                        <select
-                                            value={editForm.defaultRole}
-                                            onChange={e => setEditForm({ ...editForm, defaultRole: e.target.value })}
-                                            className="w-full h-9 px-2 rounded-md border border-slate-300 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
-                                        >
-                                            {roles.map(r => <option key={r} value={r}>{r}</option>)}
-                                        </select>
+                                        <div className="space-y-2">
+                                            <select
+                                                value={editForm.defaultRole}
+                                                onChange={e => setEditForm({ ...editForm, defaultRole: e.target.value })}
+                                                className="w-full h-9 px-2 rounded-md border border-slate-300 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
+                                            >{roles.map(r => <option key={r} value={r}>{r}</option>)}</select>
+                                            <input
+                                                type="url"
+                                                value={editForm.feedUrl || ''}
+                                                onChange={e => setEditForm({ ...editForm, feedUrl: e.target.value })}
+                                                className="w-full h-9 px-2 rounded-md border border-slate-300 text-xs focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
+                                                placeholder="When I Work calendar link (webcal or https)"
+                                                spellCheck="false"
+                                            />
+                                            <p className="text-[10px] text-slate-400 leading-tight">
+                                                Personal "Subscribe to schedule" link from their account settings. Stored securely, never committed.
+                                            </p>
+                                        </div>
                                     ) : (
                                         <span
                                             style={{
@@ -251,9 +262,10 @@ export const EmployeeManager = () => {
                                                 color: '#ffffff',
                                                 textShadow: '0 1px 2px rgba(0,0,0,0.2)'
                                             }}
-                                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium"
                                         >
                                             {emp.defaultRole}
+                                            {emp.feedUrl && <Link2 className="w-3 h-3 opacity-80" />}
                                         </span>
                                     )}
                                 </td>

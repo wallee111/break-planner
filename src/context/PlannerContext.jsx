@@ -5,6 +5,7 @@ import {
 } from '../utils/initialData';
 import { INITIAL_ROSTER } from '../utils/rosterData';
 import { generateSchedule as genScheduleAlgo, validateSchedule as valScheduleAlgo } from '../utils/scheduler';
+import { syncRosterForDate } from '../services/wheniworkSync';
 import * as api from '../services/plannerService';
 import { useAuth } from './AuthContext';
 
@@ -30,7 +31,8 @@ const normalizeEmployee = (e) => ({
 const normalizeRosterItem = (r) => ({
     ...r,
     defaultRole: r.default_role || 'Product Guide',
-    avatarColor: r.avatar_color
+    avatarColor: r.avatar_color,
+    feedUrl: r.feed_url || ''
 });
 
 export const PlannerProvider = ({ children }) => {
@@ -263,6 +265,72 @@ export const PlannerProvider = ({ children }) => {
         addToLog('Removed from roster', 'warning');
     };
 
+    // --- Actions: When I Work Sync ---
+
+    /**
+     * Pull shifts from every roster member's When I Work calendar feed for the
+     * given date (YYYY-MM-DD) and build the daily team from them: employees
+     * already on the team get their shift times/role updated, everyone else
+     * with a shift is added. Roster members without a feed are ignored.
+     * @returns { added, updated, off, errors: string[] }
+     */
+    const syncFromWhenIWork = async (dateStr) => {
+        const withFeeds = roster.filter(r => r.feedUrl);
+        if (withFeeds.length === 0) {
+            const msg = 'When I Work sync: no calendar feeds configured yet (add them on the Employees page)';
+            addToLog(msg, 'warning');
+            return { added: 0, updated: 0, off: 0, errors: [msg] };
+        }
+
+        addToLog(`When I Work sync started for ${dateStr}`, 'action');
+        const results = await syncRosterForDate(withFeeds, dateStr);
+
+        let added = 0;
+        let updated = 0;
+        let off = 0;
+        const errors = [];
+
+        for (const { employee, shifts, error } of results) {
+            if (error) {
+                errors.push(`${employee.name}: ${error}`);
+                continue;
+            }
+            if (shifts.length === 0) {
+                off++; // not scheduled that day
+                continue;
+            }
+
+            // If several shifts land on the same date, use the first
+            const shift = shifts[0];
+            const role = shift.role || employee.defaultRole;
+            if (role) addRole(role); // make sure the role has a color entry
+
+            const existing = employees.find(e => e.name === employee.name);
+            if (existing) {
+                await updateEmployee(existing.id, {
+                    roles: [role],
+                    startTime: shift.startTime,
+                    endTime: shift.endTime
+                });
+                updated++;
+            } else {
+                await addEmployee({
+                    name: employee.name,
+                    roles: [role],
+                    default_role: role,
+                    startTime: shift.startTime,
+                    endTime: shift.endTime,
+                    avatarColor: employee.avatarColor
+                });
+                added++;
+            }
+        }
+
+        const summary = `When I Work sync (${dateStr}): ${added} added, ${updated} updated, ${off} off, ${errors.length} error(s)`;
+        addToLog(summary, errors.length ? 'warning' : 'success');
+        return { added, updated, off, errors };
+    };
+
     // --- Actions: Settings ---
 
     const updateRules = (newRules) => {
@@ -431,6 +499,7 @@ export const PlannerProvider = ({ children }) => {
         addToRoster,
         updateRosterEmployee,
         deleteFromRoster,
+        syncFromWhenIWork,
         roleColors,
         updateRoleColor,
         addRole,

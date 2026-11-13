@@ -108,6 +108,7 @@ export const addToRoster = async (employee) => {
             name: employee.name,
             default_role: employee.defaultRole || employee.default_role || 'Product Guide',
             avatar_color: employee.avatarColor,
+            feed_url: employee.feedUrl || employee.feed_url || null,
             user_id: user.id
         }])
         .select()
@@ -125,6 +126,8 @@ export const updateRosterEmployee = async (id, updates) => {
     if (updates.name) dbUpdates.name = updates.name;
     if (updates.defaultRole) dbUpdates.default_role = updates.defaultRole;
     if (updates.avatarColor) dbUpdates.avatar_color = updates.avatarColor;
+    // Explicit undefined check so clearing a value saves an empty string
+    if (updates.feedUrl !== undefined) dbUpdates.feed_url = updates.feedUrl || null;
 
     const { data, error } = await supabase
         .from('roster')

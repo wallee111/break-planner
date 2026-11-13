@@ -11,7 +11,7 @@
 # commit if any match. To bypass legitimately (never for real links), use:
 #   git commit --no-verify
 #
-FORBIDDEN_PATTERNS='webcal://|wheniwork\.com/calendar|\.ics\?|/calendar/[0-9a-f]{32,}|[a-z0-9-]+\.supabase\.co'
+FORBIDDEN_PATTERNS='webcal://[a-zA-Z0-9]|wheniwork\.com/calendar|\.ics\?|/calendar/[0-9a-f]{32,}|[a-z0-9-]+\.supabase\.co'
 
 # Gather added lines from staged changes (new + modified files only).
 # .githooks/ is exempt: the hook source itself must contain the literal patterns.

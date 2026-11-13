@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { parse, format, addMinutes, differenceInMinutes, setHours, setMinutes, startOfDay, roundToNearestMinutes } from 'date-fns';
-import { Play, AlertTriangle, CheckCircle, Plus } from 'lucide-react';
+import { Play, AlertTriangle, CheckCircle, Plus, RefreshCw, CalendarDays } from 'lucide-react';
 
 import { calculateBreaks } from '../../utils/scheduler';
 import { usePlanner } from '../../context/PlannerContext';
@@ -47,7 +47,8 @@ export const TimelineView = () => {
     updateEmployee,
     rules,
     coverageRules,
-    viewRange
+    viewRange,
+    syncFromWhenIWork
   } = usePlanner();
 
   // ==========================================================================
@@ -78,6 +79,11 @@ export const TimelineView = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [containerWidth, setContainerWidth] = useState(1000);
   const [selectedBreak, setSelectedBreak] = useState(null); // { empId, breakId }
+
+  // When I Work sync state
+  const [syncDate, setSyncDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null); // { type, message }
 
   // Keep dragStateRef in sync
   useEffect(() => { dragStateRef.current = dragState; }, [dragState]);
@@ -642,6 +648,29 @@ export const TimelineView = () => {
     setIsAddMenuOpen(false);
   }, [addEmployee]);
 
+  const handleSyncWhenIWork = useCallback(async () => {
+    setIsSyncing(true);
+    setSyncStatus(null);
+    try {
+      const res = await syncFromWhenIWork(syncDate);
+      if (res.errors?.length) {
+        setSyncStatus({
+          type: 'error',
+          message: res.errors[0]
+        });
+      } else {
+        setSyncStatus({
+          type: 'success',
+          message: `Synced: ${res.added} added, ${res.updated} updated, ${res.off} not scheduled`
+        });
+      }
+    } catch (e) {
+      setSyncStatus({ type: 'error', message: e.message || 'Sync failed' });
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [syncFromWhenIWork, syncDate]);
+
   // ==========================================================================
   // RENDER
   // ==========================================================================
@@ -661,9 +690,43 @@ export const TimelineView = () => {
               <AlertTriangle className="w-4 h-4" /> {validationErrors.length} Issues
             </div>
           )}
+          {syncStatus && (
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm ${
+              syncStatus.type === 'error'
+                ? 'text-red-600 bg-red-50'
+                : 'text-emerald-600 bg-emerald-50'
+            }`}>
+              <RefreshCw className="w-4 h-4 shrink-0" />
+              <span>{syncStatus.message}</span>
+              <button
+                onClick={() => setSyncStatus(null)}
+                className="ml-1 text-current opacity-50 hover:opacity-100 text-xs"
+                title="Dismiss"
+              >✕</button>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-2 items-center flex-wrap">
+          <div className="flex items-center gap-2 h-9 px-3 rounded-lg border border-slate-200 bg-slate-50">
+            <CalendarDays className="w-4 h-4 text-slate-400" />
+            <input
+              type="date"
+              value={syncDate}
+              onChange={e => setSyncDate(e.target.value)}
+              className="bg-transparent text-sm text-slate-700 focus:outline-none"
+            />
+          </div>
+          <Button
+            onClick={handleSyncWhenIWork}
+            variant="secondary"
+            disabled={isSyncing}
+            className="flex items-center gap-2"
+            title="Pull shifts from When I Work feeds into the daily team"
+          >
+            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Syncing…' : 'Sync WIW'}
+          </Button>
           <Button onClick={() => updateSchedule([], 'Cleared')} variant="outline" className="text-red-700">
             Clear
           </Button>
