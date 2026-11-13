@@ -1,16 +1,49 @@
-# React + Vite
+# Break Planner
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Retail break-scheduling MVP: enter shifts + break/coverage rules, auto-generate a
+staggered break plan, visualize it on a timeline, and adjust by drag-and-drop with
+live conflict warnings. React + Vite + Tailwind, Supabase backend.
 
-Currently, two official plugins are available:
+## Secrets & Links Policy (enforced)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+**Calendar links and secret tokens must never be committed to this repository.**
 
-## React Compiler
+When I Work calendar feeds (and any `webcal:` schedule links) embed a private
+token in the URL — anyone holding the link can read that person's shift
+schedule. This is enforced by a pre-commit hook (`.githooks/pre-commit`) that
+blocks any staged content containing feed URLs, When I Work calendar links, or
+Supabase project URLs.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Where these values belong instead:
 
-## Expanding the ESLint configuration
+| Value | Where it lives |
+|---|---|
+| Employee calendar feed link | The roster's "Calendar Feed URL" field (stored in Supabase, per employee) |
+| Supabase URL / anon key | `src/lib/supabase.js` local overrides or `.env` (gitignored) |
+| Raw `.ics` files | Never in the repo — gitignored (`*.ics`) |
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+If the hook fires on a false positive, `git commit --no-verify` bypasses it.
+Do not use that to commit a real link.
+
+## Development
+
+```bash
+npm install
+npm run dev      # dev server (includes /wiw-proxy → When I Work calendar proxy)
+npm run build
+npm run lint
+node test_ics.mjs   # verify ICS parsing against a saved feed sample
+```
+
+### When I Work sync
+
+Each roster member can store their private When I Work calendar feed URL.
+On the daily Setup page, "Sync from When I Work" pulls the shifts for the
+chosen date and builds the daily team automatically (times + role).
+
+Because When I Work's calendar endpoint does not send CORS headers, the feed
+is fetched through a proxy:
+
+- **Dev**: Vite dev-server proxy (`/wiw-proxy/<token>.ics`), configured in `vite.config.js`.
+- **Production**: Supabase Edge Function — source is ready in
+  `supabase/functions/wiw-proxy/`; deploy with the Supabase CLI.

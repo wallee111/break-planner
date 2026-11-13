@@ -1,0 +1,40 @@
+#!/bin/sh
+#
+# RULE: No external calendar/feed links or secret tokens may ever be committed.
+#
+# Calendar links (webcal://..., app.wheniwork.com/calendar/<token>.ics, etc.)
+# contain private tokens — anyone holding the link can read that person's
+# shift schedule. They live in the database (roster.feed_url) or a local
+# .env file, never in the repository.
+#
+# This hook scans staged ADDED lines for forbidden patterns and blocks the
+# commit if any match. To bypass legitimately (never for real links), use:
+#   git commit --no-verify
+#
+FORBIDDEN_PATTERNS='webcal://|wheniwork\.com/calendar|\.ics\?|/calendar/[0-9a-f]{32,}|[a-z0-9-]+\.supabase\.co'
+
+# Gather added lines from staged changes (new + modified files only).
+# .githooks/ is exempt: the hook source itself must contain the literal patterns.
+ADDED=$(git diff --cached --diff-filter=ACM -U0 -- . ':!package-lock.json' ':!.githooks' | grep -E '^[^-]' | grep -E '^\+' | grep -vE '^\+\+\+')
+
+if echo "$ADDED" | grep -Einq "$FORBIDDEN_PATTERNS"; then
+    echo ""
+    echo "  ✖ COMMIT BLOCKED — forbidden link or secret token detected."
+    echo ""
+    echo "  Calendar/feed URLs (webcal://, wheniwork.com/calendar/<token>,"
+    echo "  *.supabase.co URLs) contain private tokens and must never be"
+    echo "  committed to this repository."
+    echo ""
+    echo "  Where they belong instead:"
+    echo "    • Employee calendar feed → roster 'Calendar Feed URL' field (stored in Supabase)"
+    echo "    • Supabase credentials  → src/lib/supabase.js local overrides or .env (gitignored)"
+    echo ""
+    echo "  If this is a false positive, run: git commit --no-verify"
+    echo ""
+    # Show the offending lines (truncated) to help locate them
+    echo "$ADDED" | grep -Ein "$FORBIDDEN_PATTERNS" | head -5 | sed 's/^/    /'
+    echo ""
+    exit 1
+fi
+
+exit 0

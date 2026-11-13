@@ -119,3 +119,13 @@ dist
 
 # Gemini
 .gemini/
+
+# Local agent tooling
+.claude/
+
+# macOS
+.DS_Store
+
+# Calendar feed files — contain private schedule data, never commit
+*.ics
+*.ical
