@@ -9,7 +9,7 @@ Built for the Arc'teryx Toronto (Queen St W) floor, but nothing in it is
 store-specific.
 
 - **Stack:** React 19 · Vite 7 · Tailwind 3 · Supabase (Auth + Postgres + RLS) · recharts 3 · date-fns 4
-- **Status:** active MVP, runs locally (`npm run dev`); not deployed yet
+- **Status:** active MVP. Deployed on Vercel (auto-deploys from `main`); runs locally with `npm run dev`
 - **Product brief:** [`brief.md`](brief.md) · **Backlog:** [`more-ideas.md`](more-ideas.md)
 
 ---
@@ -170,14 +170,18 @@ directly. The app fetches `<proxy>/<token>.ics` instead:
   accepts hex feed tokens, so it can't be used as an open proxy:
 
   ```bash
-  supabase functions deploy wiw-proxy --no-verify-jwt
+  npx supabase login                       # once, opens the browser
+  npx supabase functions deploy wiw-proxy \
+    --project-ref <project-ref> --no-verify-jwt --use-api
   # optional: lock CORS to your app's origin
-  supabase secrets set ALLOWED_ORIGIN=https://your-app.example
+  npx supabase secrets set ALLOWED_ORIGIN=https://your-app.example --project-ref <project-ref>
   ```
 
   Then set `VITE_WIW_PROXY_URL=https://<project-ref>.supabase.co/functions/v1/wiw-proxy`.
   `--no-verify-jwt` is required: the app's proxy request carries no Supabase JWT,
-  so the default JWT check would reject it with 401. *(The production path is
+  so the default JWT check would reject it with 401. `--use-api` bundles the
+  function on Supabase's side, so Docker isn't needed. (`npx supabase` works
+  without a Homebrew install.) *(The production path is
   written but not yet exercised against a deployed function.)*
 
 ## Coverage warnings
@@ -295,7 +299,7 @@ bypasses it. Never use that to commit a real link.
 - **Store-feed matching needs names in events.** If a store-wide feed carries no
   employee names, shifts can't be attributed (they show as *unmatched*); the When
   I Work API would be the fallback.
-- **Not deployed.** The production proxy path is written but unexercised.
+- **Production proxy** is rehearsed locally (real edge-function code + production bundle) but not yet exercised on a deployed function.
 - **Lint baseline.** 6 pre-existing lint errors.
 
 Planned work lives in [`more-ideas.md`](more-ideas.md).
