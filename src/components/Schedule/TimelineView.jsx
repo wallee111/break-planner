@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { parse, format, addMinutes, differenceInMinutes, setHours, setMinutes, startOfDay, roundToNearestMinutes } from 'date-fns';
-import { Play, AlertTriangle, Plus, RefreshCw, CalendarDays } from 'lucide-react';
+import { parse, format, addMinutes, addDays, differenceInMinutes, setHours, setMinutes, startOfDay, roundToNearestMinutes } from 'date-fns';
+import { Play, AlertTriangle, Plus, RefreshCw, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { calculateBreaks } from '../../utils/scheduler';
+import { toLocalDateKey } from '../../utils/scheduleSerialization';
 import { usePlanner } from '../../context/PlannerContext';
 import { Button } from '../ui/Button';
 import { LaborChart } from './LaborChart';
@@ -48,8 +49,12 @@ export const TimelineView = () => {
     coverageRules,
     viewRange,
     syncFromWhenIWork,
+    storeFeedUrl,
     planDate,
-    setPlanDate
+    setPlanDate,
+    isLoading,
+    isDayLoading,
+    loadedDate
   } = usePlanner();
 
   // ==========================================================================
@@ -80,12 +85,30 @@ export const TimelineView = () => {
   const [containerWidth, setContainerWidth] = useState(1000);
   const [selectedBreak, setSelectedBreak] = useState(null); // { empId, breakId }
 
-  // When I Work sync state (the date itself is the shared planDate in context —
-  // it's also the date the schedule is saved under and restored with)
+  // The date picker drives everything: it is the shared planDate in context,
+  // so changing it loads that day's team + breaks, and it's the date When I
+  // Work syncs for and the date edits are saved under.
   const syncDate = planDate;
-  const setSyncDate = setPlanDate;
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null); // { type, message }
+
+  const todayKey = toLocalDateKey();
+  const isToday = planDate === todayKey;
+  const planDateObj = parse(planDate, 'yyyy-MM-dd', new Date());
+  const planDateLabel = format(planDateObj, 'EEE, MMM d');
+  // Switching days mid-sync or mid-load would mix two days' data.
+  const dateLocked = isSyncing || isDayLoading;
+  const goToDate = useCallback((key) => {
+    if (!key || dateLocked) return;
+    setSyncStatus(null);
+    setSelectedBreak(null);
+    setPlanDate(key);
+  }, [dateLocked, setPlanDate]);
+  const shiftDate = (days) => goToDate(toLocalDateKey(addDays(planDateObj, days)));
+  const hasFeeds = !!storeFeedUrl || roster.some(r => r.feedUrl);
+  // Dates already auto-synced this session (so a day with no shifts doesn't
+  // re-sync on every render).
+  const autoSyncedDates = useRef(new Set());
 
   // Dismissed warnings, keyed by time|message. Validation is derived, so if a
   // problem changes (different count/time) it reappears as a new key; a
@@ -688,6 +711,23 @@ export const TimelineView = () => {
     }
   }, [syncFromWhenIWork, syncDate]);
 
+  // Opening today or a future date that has nothing saved yet pulls that
+  // day's shifts from When I Work automatically (shift blocks + generated
+  // breaks, saved for that date). Past dates are only ever shown as saved.
+  useEffect(() => {
+    if (isLoading || isDayLoading || isSyncing) return;
+    // Only once THIS date's data is in state — otherwise the previous day's
+    // (possibly empty) team would look like "nothing saved" and we'd sync
+    // on top of a real plan.
+    if (loadedDate !== planDate) return;
+    if (!hasFeeds || employees.length > 0) return;
+    if (planDate < todayKey || autoSyncedDates.current.has(planDate)) return;
+    autoSyncedDates.current.add(planDate);
+    // Deferred so the sync's state updates don't run inside the effect body
+    const t = setTimeout(handleSyncWhenIWork, 0);
+    return () => clearTimeout(t);
+  }, [isLoading, isDayLoading, isSyncing, loadedDate, hasFeeds, employees.length, planDate, todayKey, handleSyncWhenIWork]);
+
   // ==========================================================================
   // RENDER
   // ==========================================================================
@@ -725,15 +765,43 @@ export const TimelineView = () => {
         </div>
 
         <div className="flex gap-2 items-center flex-wrap">
-          <div className="flex items-center gap-2 h-9 px-3 rounded-lg border border-slate-200 bg-slate-50">
-            <CalendarDays className="w-4 h-4 text-slate-400" />
-            <input
-              type="date"
-              value={syncDate}
-              onChange={e => setSyncDate(e.target.value)}
-              className="bg-transparent text-sm text-slate-700 focus:outline-none"
-            />
+          <div className="flex items-center h-9 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden">
+            <button
+              onClick={() => shiftDate(-1)}
+              disabled={dateLocked}
+              className="h-full px-2 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+              title="Previous day"
+              aria-label="Previous day"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <label className="flex items-center gap-2 px-2 h-full border-x border-slate-200" title="Pick the day to plan">
+              <CalendarDays className="w-4 h-4 text-slate-400" />
+              <span className="text-sm font-medium text-slate-700 whitespace-nowrap">{planDateLabel}</span>
+              <input
+                type="date"
+                value={planDate}
+                onChange={e => goToDate(e.target.value)}
+                disabled={dateLocked}
+                aria-label="Plan date"
+                className="bg-transparent text-sm text-slate-500 focus:outline-none w-[2.2rem] cursor-pointer disabled:cursor-not-allowed"
+              />
+            </label>
+            <button
+              onClick={() => shiftDate(1)}
+              disabled={dateLocked}
+              className="h-full px-2 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+              title="Next day"
+              aria-label="Next day"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
+          {!isToday && (
+            <Button onClick={() => goToDate(todayKey)} variant="outline" disabled={dateLocked} className="h-9">
+              Today
+            </Button>
+          )}
           <Button
             onClick={handleSyncWhenIWork}
             variant="secondary"
@@ -762,12 +830,14 @@ export const TimelineView = () => {
         {/* Crosshair Guide (imperatively positioned — no re-render on mousemove) */}
         <Crosshair lineRef={crosshairRef} />
 
-        {/* Current Time Indicator */}
-        <CurrentTimeIndicator
-          currentTime={currentTime}
-          getLeftPos={getLeftPos}
-          containerWidth={containerWidth}
-        />
+        {/* Current Time Indicator — only meaningful when planning today */}
+        {isToday && (
+          <CurrentTimeIndicator
+            currentTime={currentTime}
+            getLeftPos={getLeftPos}
+            containerWidth={containerWidth}
+          />
+        )}
 
         {/* Break Guide Line (during drag) */}
         <BreakGuideLine
@@ -794,7 +864,24 @@ export const TimelineView = () => {
             hourWidth={hourWidth}
           />
           {employees.length === 0 && (
-            <div className="p-12 text-center text-slate-400">No employees.</div>
+            <div className="p-12 text-center text-slate-400" data-testid="day-empty-state">
+              {isDayLoading || loadedDate !== planDate ? (
+                <>Loading {planDateLabel}…</>
+              ) : isSyncing ? (
+                <>Pulling {planDateLabel} from When I Work…</>
+              ) : (
+                <>
+                  <div className="text-slate-600 font-medium">Nothing scheduled for {planDateLabel} yet.</div>
+                  <div className="text-sm mt-1">
+                    {planDate < todayKey
+                      ? 'No plan was saved for this day.'
+                      : hasFeeds
+                        ? 'No one has a When I Work shift that day. Sync again later, or add people below.'
+                        : 'Add people below, or set up When I Work links on the Employees tab to fill days automatically.'}
+                  </div>
+                </>
+              )}
+            </div>
           )}
 
           {displayedEmployees.map(emp => (

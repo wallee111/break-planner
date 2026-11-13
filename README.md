@@ -46,8 +46,10 @@ store-specific.
 - **Accounts.** Supabase email auth with forgot-password and set-new-password
   flows. Each user's roster, settings and schedules are private (row-level
   security).
-- **Persistence.** Roster, rules, role colours and schedules save to Supabase. The
-  last saved schedule is restored on load.
+- **A plan per day.** The date picker (‹ › and **Today**) switches between days;
+  each day keeps its own team and breaks, saved automatically as you edit.
+  Opening today or a future day that has nothing saved pulls its shifts from When
+  I Work and places breaks for you.
 
 ## Getting started
 
@@ -95,6 +97,7 @@ In the Supabase dashboard → **SQL Editor**, run these files **in this order**:
 | 7 | `migration_view_range.sql` | `settings.view_range` |
 | 8 | `migration_feed_url.sql` | `roster.feed_url` (per-employee WIW link) |
 | 9 | `migration_store_feed.sql` | `settings.store_feed_url` (store-wide WIW link) |
+| 10 | `migration_plan_date.sql` | `employees.plan_date` + `schedules.updated_at` (a plan per day). Additive; assigns existing team rows to their last saved date |
 
 Then verify everything is in place:
 
@@ -125,11 +128,13 @@ npm run dev               # http://localhost:5173
    with Enter). Or paste one store-wide link into **Store Feed** at the top.
 2. **Parameters tab.** Set break rules (by shift length), coverage rules (minimum
    staff per role, `Any` = everyone) and role colours.
-3. **Schedule tab.** Pick the date, hit **Sync WIW**. Everyone working that day
-   appears with their shift and auto-placed breaks.
+3. **Schedule tab.** Pick the day with the date picker. If nothing is saved for
+   it yet (today or later) and feeds are set up, everyone working that day appears
+   automatically with their shift and auto-placed breaks. **Sync WIW** re-pulls
+   shifts at any time (e.g. after schedule changes in When I Work).
 4. **Adjust.** Drag breaks and shifts and watch the warnings and the labor chart
    update live. **Generate** re-plans all breaks from scratch; **Clear** empties
-   the schedule.
+   the breaks. Every change saves to that day; there's no Save button.
 
 ## When I Work sync
 
@@ -181,8 +186,7 @@ directly. The app fetches `<proxy>/<token>.ics` instead:
   `--no-verify-jwt` is required: the app's proxy request carries no Supabase JWT,
   so the default JWT check would reject it with 401. `--use-api` bundles the
   function on Supabase's side, so Docker isn't needed. (`npx supabase` works
-  without a Homebrew install.) *(The production path is
-  written but not yet exercised against a deployed function.)*
+  without a Homebrew install.) This is how the live deployment is set up.
 
 ## Coverage warnings
 
@@ -206,15 +210,20 @@ All tables are per-user via RLS (`auth.uid() = user_id`).
 | Table | Holds |
 |---|---|
 | `roster` | Master employee list: name, default role, colour, `feed_url` |
-| `employees` | The day's team: name, roles, shift start/end |
+| `employees` | Each day's team: one row per person per `plan_date` (name, roles, shift start/end) |
 | `settings` | One row per user: break rules, coverage rules, role colours, view range, `store_feed_url` |
-| `schedules` | Saved break plans (`schedule_data` JSONB) keyed by date. **Append-only:** every change inserts a new version. |
+| `schedules` | Each day's break plan (`schedule_data` JSONB): one row per user + `date`, updated in place (newest `updated_at` wins) |
 
-On load the app restores the newest saved schedule. Break times are stored as JSON
-strings and re-anchored onto the current day as time-of-day
+The app opens on today. Changing the date loads that day's `employees` rows and
+`schedules` row; a day with nothing saved loads empty. Dates are **local**
+calendar days. Saves for a day are queued so they apply in order, and a slow
+response for a day you've already left is ignored.
+
+Break times are stored as JSON strings and re-anchored as time-of-day
 ([`src/utils/scheduleSerialization.js`](src/utils/scheduleSerialization.js)).
-Schedules are saved under the **local** planning date shown in the Schedule tab's
-date picker.
+
+Before `migration_plan_date.sql`, every edit inserted a new `schedules` row. Those
+old copies are still in the table, unused (the newest per day is the live one).
 
 ## Project structure
 
@@ -232,7 +241,7 @@ src/
     Employees/EmployeeManager.jsx  Employees tab: roster table, feed links, store feed
     Setup/*Config.jsx           Parameters tab cards (break rules, coverage rules, roles)
     Auth/                       login / signup / reset screens, profile
-    ui/                         Button, Card, Input, TimeInput
+    ui/                         Button, Card, Input
   services/
     plannerService.js           Supabase CRUD (roster, employees, settings, schedules)
     wheniworkSync.js            feed fetch (direct → proxy), date bucketing, store-feed matching
@@ -246,14 +255,11 @@ schema.sql, migration_*.sql     database setup (see Getting started)
 .githooks/pre-commit            blocks committing calendar links / project URLs
 ```
 
-`Setup/EmployeeList.jsx` and `Setup/RosterManager.jsx` are legacy and are imported
-but not rendered.
-
 ## Testing & verification
 
 ```bash
 npm run build                    # must pass
-npm run lint                     # baseline: 6 pre-existing errors; don't add new ones
+npm run lint                     # must be clean (0 errors)
 node test_ics.mjs                # ICS parser + WIW sync helpers + store-feed matching (38 checks)
 node test_validation.mjs         # generator + coverage validation regressions (9 checks)
 node test_schedule_restore.mjs   # saved-schedule round trip / restore (14 checks)
@@ -292,14 +298,14 @@ bypasses it. Never use that to commit a real link.
 
 ## Known limitations
 
-- **One schedule at a time.** The app restores the most recent saved schedule. The
-  day's team isn't stored per date yet, so changing the date picker doesn't load
-  that date's plan (see the calendar item in the backlog).
-- **Schedule versions grow.** Every change appends a `schedules` row.
+- **Past days never auto-sync.** They show only what was saved; use **Sync WIW**
+  to pull them on purpose.
+- **Roster edits don't reach other days.** Renaming someone or changing their
+  colour updates the day on screen; other days keep the old values.
+- **Old schedule copies.** Rows from before per-day saving remain in `schedules`
+  (about 1,500 on the live database). Harmless; can be pruned.
 - **Store-feed matching needs names in events.** If a store-wide feed carries no
   employee names, shifts can't be attributed (they show as *unmatched*); the When
   I Work API would be the fallback.
-- **Production proxy** is rehearsed locally (real edge-function code + production bundle) but not yet exercised on a deployed function.
-- **Lint baseline.** 6 pre-existing lint errors.
 
 Planned work lives in [`more-ideas.md`](more-ideas.md).

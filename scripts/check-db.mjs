@@ -33,7 +33,9 @@ const CHECKS = [
     ['settings table', 'migration_settings.sql', 'settings', null],
     ['settings.store_hours', 'migration_store_hours.sql', 'settings', 'store_hours'],
     ['settings.view_range', 'migration_view_range.sql', 'settings', 'view_range'],
-    ['settings.store_feed_url', 'migration_store_feed.sql', 'settings', 'store_feed_url']
+    ['settings.store_feed_url', 'migration_store_feed.sql', 'settings', 'store_feed_url'],
+    ['employees.plan_date', 'migration_plan_date.sql', 'employees', 'plan_date'],
+    ['schedules.updated_at', 'migration_plan_date.sql', 'schedules', 'updated_at']
 ];
 
 const probe = async (table, column) => {

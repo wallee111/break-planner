@@ -2,12 +2,17 @@
 import { supabase } from '../lib/supabase';
 
 // --- Employees ---
+// Each employees row is one person on ONE day's team (plan_date). The same
+// roster member appears once per day they work.
 
-export const fetchEmployees = async () => {
-    const { data, error } = await supabase
+export const fetchEmployees = async (planDate) => {
+    let query = supabase
         .from('employees')
         .select('*')
         .order('name');
+    if (planDate) query = query.eq('plan_date', planDate);
+
+    const { data, error } = await query;
 
     if (error) {
         console.error('Error fetching employees:', error);
@@ -31,6 +36,7 @@ export const createEmployee = async (employee) => {
         start_time: employee.startTime || employee.start_time || '09:00',
         end_time: employee.endTime || employee.end_time || '17:00',
         avatar_color: employee.avatarColor,
+        plan_date: employee.planDate || null,
         user_id: user.id
     };
 
@@ -157,62 +163,91 @@ export const deleteFromRoster = async (id) => {
 };
 
 // --- Schedules ---
+// One row per (user, date), updated in place. Before migration_plan_date.sql
+// every change inserted a new row; those older rows are left alone and the
+// newest (by updated_at) wins on load.
 
+// Row id per user+date, so each drag is a single UPDATE (no lookup).
+const scheduleRowIds = new Map();
+// Per-date write queue: saves run strictly in order, so a slow earlier save
+// can never overwrite a newer one, and the first save for a new date can't
+// race a second into inserting two rows.
+const saveQueues = new Map();
+
+const writeSchedule = async (userId, date, scheduleData) => {
+    const key = `${userId}:${date}`;
+    const now = new Date().toISOString();
+    let id = scheduleRowIds.get(key);
+
+    if (!id) {
+        const { data: existing, error: findError } = await supabase
+            .from('schedules')
+            .select('id')
+            .eq('date', date)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        if (findError) console.error('Error finding schedule row:', findError);
+        id = existing?.id;
+    }
+
+    if (id) {
+        const { data, error } = await supabase
+            .from('schedules')
+            .update({ schedule_data: scheduleData, updated_at: now })
+            .eq('id', id)
+            .select('id')
+            .maybeSingle();
+        if (!error && data) {
+            scheduleRowIds.set(key, id);
+            return data;
+        }
+        if (error) console.error('Error updating schedule:', error);
+        scheduleRowIds.delete(key); // row vanished — fall through to insert
+    }
+
+    const { data, error } = await supabase
+        .from('schedules')
+        .insert([{ date, schedule_data: scheduleData, user_id: userId, updated_at: now }])
+        .select('id')
+        .single();
+    if (error) {
+        console.error('Error saving schedule:', error);
+        return null;
+    }
+    scheduleRowIds.set(key, data.id);
+    return data;
+};
 
 export const saveSchedule = async (date, scheduleData) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
-    // For MVP, we just append a new record. 
-    // Ideally we might update an existing one for the date, or keep version history.
-    const { data, error } = await supabase
-        .from('schedules')
-        .insert([{
-            date: date,
-            schedule_data: scheduleData,
-            user_id: user.id
-        }])
-        .select()
-        .single();
-
-    if (error) console.error('Error saving schedule:', error);
-    return data;
-};
-
-export const fetchLatestSchedule = async (date) => {
-    // Get the most recently created schedule for the date
-    const { data, error } = await supabase
-        .from('schedules')
-        .select('*')
-        .eq('date', date)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-
-    if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
-        console.error('Error fetching schedule:', error);
-    }
-    return data ? data.schedule_data : null;
+    const key = `${user.id}:${date}`;
+    const prev = saveQueues.get(key) || Promise.resolve();
+    const next = prev.catch(() => {}).then(() => writeSchedule(user.id, date, scheduleData));
+    saveQueues.set(key, next);
+    return next;
 };
 
 /**
- * The user's most recently saved schedule, regardless of date — what the
- * planner restores on load. RLS limits rows to the signed-in user.
- * Returns { date, schedule_data } or null.
+ * The saved break plan for one date, or null if none exists.
+ * Returns the raw schedule_data array.
  */
-export const fetchMostRecentSchedule = async () => {
+export const fetchScheduleForDate = async (date) => {
     const { data, error } = await supabase
         .from('schedules')
-        .select('date, schedule_data, created_at')
-        .order('created_at', { ascending: false })
+        .select('id, schedule_data')
+        .eq('date', date)
+        .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
     if (error) {
-        console.error('Error fetching most recent schedule:', error);
+        console.error('Error fetching schedule:', error);
         return null;
     }
-    return data;
+    return data ? data.schedule_data : null;
 };
 
 // --- Settings ---

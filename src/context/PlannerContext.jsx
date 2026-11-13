@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
     INITIAL_EMPLOYEES, INITIAL_RULES, INITIAL_COVERAGE_RULES,
     INITIAL_ROLE_COLORS
@@ -64,6 +64,16 @@ export const PlannerProvider = ({ children }) => {
     // Meta
     const [activityLog, setActivityLog] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    // True while the selected date's team + breaks are being fetched.
+    const [isDayLoading, setIsDayLoading] = useState(false);
+    // The date whose team + breaks are currently in state. Right after the
+    // date changes there's a render where planDate is the NEW day but
+    // employees still hold the OLD day; anything that acts on "this day is
+    // empty" must check loadedDate === planDate first.
+    const [loadedDate, setLoadedDate] = useState(null);
+    // Bumped on every day load so a slow response for a date the user has
+    // already navigated away from is ignored instead of overwriting the view.
+    const dayLoadSeq = useRef(0);
 
     // Coverage validation — DERIVED from current state, never stored. Each
     // warning is { time, kind: 'staffing' | 'break', message }.
@@ -98,39 +108,21 @@ export const PlannerProvider = ({ children }) => {
 
             setIsLoading(true);
             try {
-                // Load critical data in parallel
-                const [dbEmployees, dbRoster, dbSettings, dbSchedule] = await Promise.all([
-                    api.fetchEmployees(),
+                // Account-wide data. The day's team + breaks load separately
+                // (per planDate) in the effect below.
+                const [dbRoster, dbSettings] = await Promise.all([
                     api.fetchRoster(),
-                    api.fetchSettings(), // assume safe to fail? kept behavior similar to original
-                    api.fetchMostRecentSchedule()
+                    api.fetchSettings()
                 ]);
 
-                // 1. Employees
-                if (dbEmployees?.length > 0) {
-                    const mapped = dbEmployees.map(normalizeEmployee).sort(sortEmployeesByTime);
-                    setEmployees(mapped);
-                } else {
-                    setEmployees([]);
-                }
-
-                // 2. Roster
+                // 1. Roster
                 if (dbRoster?.length > 0) {
                     setRoster(dbRoster.map(normalizeRosterItem));
                 } else {
                     setRoster([]);
                 }
 
-                // 2b. Last saved schedule — restore it (set state directly, NOT
-                // via updateSchedule, so loading doesn't write a new version).
-                // Breaks come back from JSON as strings and are re-anchored onto
-                // today as time-of-day (see scheduleSerialization.js).
-                if (dbSchedule?.schedule_data) {
-                    setSchedule(reviveSchedule(dbSchedule.schedule_data));
-                    if (dbSchedule.date) setPlanDate(dbSchedule.date);
-                }
-
-                // 3. Settings
+                // 2. Settings
                 if (dbSettings) {
                     if (dbSettings.break_rules?.length) setRules(dbSettings.break_rules);
                     if (dbSettings.coverage_rules?.length) setCoverageRules(dbSettings.coverage_rules);
@@ -157,6 +149,40 @@ export const PlannerProvider = ({ children }) => {
         loadData();
     }, [user, authLoading, addToLog]);
 
+    // --- Day loading: the selected date's team + saved break plan ---
+    // Runs on sign-in and whenever planDate changes. A date with nothing
+    // saved simply loads empty (the timeline offers When I Work sync).
+    useEffect(() => {
+        if (authLoading || !user) return;
+
+        const seq = ++dayLoadSeq.current;
+        const loadDay = async () => {
+            setIsDayLoading(true);
+            try {
+                const [dbEmployees, dbSchedule] = await Promise.all([
+                    api.fetchEmployees(planDate),
+                    api.fetchScheduleForDate(planDate)
+                ]);
+                if (seq !== dayLoadSeq.current) return; // user moved on
+
+                setEmployees((dbEmployees || []).map(normalizeEmployee).sort(sortEmployeesByTime));
+                // Set state directly, NOT via updateSchedule, so loading never
+                // writes. Breaks come back from JSON as strings and are
+                // re-anchored as time-of-day (see scheduleSerialization.js).
+                setSchedule(dbSchedule ? reviveSchedule(dbSchedule) : []);
+                setLoadedDate(planDate);
+            } catch (err) {
+                if (seq !== dayLoadSeq.current) return;
+                console.error('Day load failed:', err);
+                addToLog(`Failed to load the schedule for ${planDate}`, 'error');
+            } finally {
+                if (seq === dayLoadSeq.current) setIsDayLoading(false);
+            }
+        };
+
+        loadDay();
+    }, [user, authLoading, planDate, addToLog]);
+
     // --- Actions: Employees ---
 
     const addEmployee = async (empData) => {
@@ -182,13 +208,14 @@ export const PlannerProvider = ({ children }) => {
         // Optimistic Update
         setEmployees(prev => [...prev, newEmp].sort(sortEmployeesByTime));
 
-        // DB Save
+        // DB Save — filed under the day being planned
         const saved = await api.createEmployee({
             name,
             roles: [role],
             start_time: startTime,
             end_time: endTime,
-            avatarColor
+            avatarColor,
+            planDate
         });
 
         if (saved) {
@@ -576,7 +603,9 @@ export const PlannerProvider = ({ children }) => {
         renameRole,
         deleteRole,
         activityLog,
-        isLoading
+        isLoading,
+        isDayLoading,
+        loadedDate
     };
 
     return (

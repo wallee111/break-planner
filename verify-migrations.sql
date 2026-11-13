@@ -26,6 +26,8 @@ BEGIN
             ('settings.store_hours',       'migration_store_hours.sql', 'column', 'settings',  'store_hours'),
             ('settings.view_range',        'migration_view_range.sql',  'column', 'settings',  'view_range'),
             ('settings.store_feed_url',    'migration_store_feed.sql',  'column', 'settings',  'store_feed_url'),
+            ('employees.plan_date',        'migration_plan_date.sql',   'column', 'employees', 'plan_date'),
+            ('schedules.updated_at',       'migration_plan_date.sql',   'column', 'schedules', 'updated_at'),
             -- RLS policies (own-data access)
             ('employees own-access policy', 'migration_auth.sql',        'policy', 'Users can only access their own employees', NULL),
             ('schedules own-access policy', 'migration_auth.sql',       'policy', 'Users can only access their own schedules', NULL),
