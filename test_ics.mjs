@@ -15,7 +15,8 @@ import {
   extractFeedToken,
   shiftsFromEvents,
   getShiftsForDate,
-  storeShiftsFromEvents
+  storeShiftsFromEvents,
+  assertIcsBody
 } from './src/services/wheniworkSync.js';
 
 let passed = 0;
@@ -187,6 +188,17 @@ check('name in DESCRIPTION matched', storeShifts[1]?.matched && storeShifts[1]?.
 check('no-name event unmatched', storeShifts[2]?.matched === false, JSON.stringify(storeShifts[2]?.shift));
 check('unmatched shift still carries times', storeShifts[2]?.shift?.startTime === localHHmm(new Date(Date.UTC(2026, 10, 8, 15, 0))));
 check('matched count', storeShifts.filter(s => s.matched).length === 2);
+
+console.log('\n— bad / revoked links are errors, not empty calendars —');
+// When I Work returns HTTP 200 + this text for unknown tokens
+let badErr = null;
+try { assertIcsBody('That calendar does not exist.'); } catch (e) { badErr = e.message; }
+check('"That calendar does not exist." body throws', badErr && /not found or revoked/.test(badErr), badErr);
+let emptyErr = null;
+try { assertIcsBody(''); } catch (e) { emptyErr = e.message; }
+check('empty body throws', !!emptyErr, emptyErr);
+check('real (even event-less) calendar passes', assertIcsBody('BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR') !== undefined);
+check('leading whitespace tolerated', !!assertIcsBody('\r\n  BEGIN:VCALENDAR\r\nEND:VCALENDAR'));
 
 // ---------------------------------------------------------------------------
 // Optional live check — parses a real feed end-to-end (fetch → parse → bucket)

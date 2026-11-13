@@ -38,6 +38,20 @@ const toLocalDateKey = (date) => {
 };
 
 /**
+ * When I Work answers unknown/revoked feed tokens with HTTP 200 and a plain
+ * text body ("That calendar does not exist."), not a 404 — so a bad link
+ * would parse as an empty calendar and silently show the person as "not
+ * scheduled". Reject anything that isn't actually an iCalendar document.
+ */
+export const assertIcsBody = (text) => {
+    if (!/^\s*BEGIN:VCALENDAR/i.test(String(text || ''))) {
+        const snippet = String(text || '').trim().slice(0, 60);
+        throw new Error(`Calendar link not found or revoked${snippet ? ` ("${snippet}")` : ''} — re-copy it from When I Work`);
+    }
+    return text;
+};
+
+/**
  * Fetch the raw ICS text for a feed URL. Direct fetch first, proxy fallback.
  * Throws with a human-readable message on failure.
  */
@@ -48,10 +62,10 @@ export const fetchIcs = async (feedUrl) => {
     // 1. Direct — works outside the browser (Node/tests) or if CORS is ever allowed
     try {
         const res = await fetch(url);
-        if (res.ok) return await res.text();
+        if (res.ok) return assertIcsBody(await res.text());
         if (res.status === 404) throw new Error('Feed not found — check the calendar link');
     } catch (e) {
-        if (/not found/i.test(e.message)) throw e;
+        if (/not found|revoked/i.test(e.message)) throw e;
         // Otherwise fall through to the proxy (likely a CORS failure)
     }
 
@@ -62,7 +76,7 @@ export const fetchIcs = async (feedUrl) => {
     const proxyBase = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_WIW_PROXY_URL) || '/wiw-proxy';
     const res = await fetch(`${proxyBase}/${token}.ics`);
     if (!res.ok) throw new Error(`Feed fetch failed (${res.status})`);
-    return res.text();
+    return assertIcsBody(await res.text());
 };
 
 /**
