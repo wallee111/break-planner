@@ -7,6 +7,10 @@ import { INITIAL_ROSTER } from '../utils/rosterData';
 import { generateSchedule as genScheduleAlgo, validateSchedule as valScheduleAlgo } from '../utils/scheduler';
 import { syncRosterForDate, syncStoreFeedForDate } from '../services/wheniworkSync';
 import { reviveSchedule, toLocalDateKey } from '../utils/scheduleSerialization';
+import {
+    createDraft, isDraftDirty, validateDraft,
+    applyRoleOpsToEmployee, applyRoleOpsToRosterItem
+} from '../utils/parameterDraft';
 import * as api from '../services/plannerService';
 import { useAuth } from './AuthContext';
 
@@ -568,7 +572,57 @@ export const PlannerProvider = ({ children }) => {
         updateSchedule(newSchedule, 'Generated Schedule');
     };
 
-    // --- Context Value ---
+    // --- Parameters draft (Save / Discard) ---
+    // Edits on the Parameters tab collect here and apply only on Save.
+    // null = no unsaved edits. See utils/parameterDraft.js.
+    const [paramDraft, setParamDraft] = useState(null);
+    const savedParams = useMemo(
+        () => ({ rules, coverageRules, roleColors }),
+        [rules, coverageRules, roleColors]
+    );
+    const paramsDirty = isDraftDirty(paramDraft, savedParams);
+    // A draft that matches what's saved (edited then changed back) is
+    // ignored, so changes saved elsewhere meanwhile (e.g. a When I Work sync
+    // adding a role) always show and are never overwritten by a stale copy.
+    const paramsView = paramsDirty ? paramDraft : savedParams; // what the Parameters tab shows
+    const paramsError = paramsDirty ? validateDraft(paramDraft) : null;
+
+    /** Apply an edit to the draft (starting one from saved values if needed). */
+    const editParams = useCallback((fn) => {
+        setParamDraft(prev => fn(prev && isDraftDirty(prev, savedParams) ? prev : createDraft(savedParams)));
+    }, [savedParams]);
+
+    const discardParams = useCallback(() => setParamDraft(null), []);
+
+    /**
+     * Save the draft: one settings write, then apply role renames/deletes to
+     * the day's team and roster. Returns true on success; on failure the
+     * draft is kept so nothing is lost.
+     */
+    const saveParams = async () => {
+        if (!paramDraft) return true;
+        if (validateDraft(paramDraft)) return false;
+        const { rules: r, coverageRules: c, roleColors: rc, roleOps } = paramDraft;
+
+        if (user) {
+            const ok = await api.updateSettings({ break_rules: r, coverage_rules: c, role_colors: rc });
+            if (!ok) {
+                addToLog('Failed to save parameters', 'error');
+                return false;
+            }
+        }
+
+        setRules(r);
+        setCoverageRules(c);
+        setRoleColors(rc);
+        if (roleOps.length) {
+            setEmployees(prev => prev.map(e => applyRoleOpsToEmployee(e, roleOps)));
+            setRoster(prev => prev.map(item => applyRoleOpsToRosterItem(item, roleOps)));
+        }
+        setParamDraft(null);
+        addToLog('Saved parameters', 'success');
+        return true;
+    };
 
     // --- Context Value ---
 
@@ -605,7 +659,13 @@ export const PlannerProvider = ({ children }) => {
         activityLog,
         isLoading,
         isDayLoading,
-        loadedDate
+        loadedDate,
+        paramsView,
+        paramsDirty,
+        paramsError,
+        editParams,
+        saveParams,
+        discardParams
     };
 
     return (

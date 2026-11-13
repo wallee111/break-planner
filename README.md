@@ -127,7 +127,10 @@ npm run dev               # http://localhost:5173
    optionally each person's WIW calendar link (*WIW Calendar Feed* column; save
    with Enter). Or paste one store-wide link into **Store Feed** at the top.
 2. **Parameters tab.** Set break rules (by shift length), coverage rules (minimum
-   staff per role, `Any` = everyone) and role colours.
+   staff per role, `Any` = everyone) and roles/colours. Edits are a draft: a
+   **Save changes / Discard** bar slides up as soon as anything changes, and
+   leaving the tab with unsaved edits asks whether to save or discard. Role
+   renames and deletes reach the team and roster only when you save.
 3. **Schedule tab.** Pick the day with the date picker. If nothing is saved for
    it yet (today or later) and feeds are set up, everyone working that day appears
    automatically with their shift and auto-placed breaks. **Sync WIW** re-pulls
@@ -263,6 +266,7 @@ npm run lint                     # must be clean (0 errors)
 node test_ics.mjs                # ICS parser + WIW sync helpers + store-feed matching (38 checks)
 node test_validation.mjs         # generator + coverage validation regressions (9 checks)
 node test_schedule_restore.mjs   # saved-schedule round trip / restore (14 checks)
+node test_parameters.mjs         # Parameters draft: dirty tracking, role ops, validation (29 checks)
 node test_clumping.mjs           # diagnostic printout of break spacing (not pass/fail)
 npm run check:db                 # live database has every migration applied
 ```

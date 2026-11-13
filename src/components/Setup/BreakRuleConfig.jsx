@@ -6,24 +6,24 @@ import { Input } from '../ui/Input';
 import { Trash2, Plus, Clock, Coffee, DollarSign } from 'lucide-react';
 
 export const BreakRuleConfig = () => {
-    const { rules, updateRules } = usePlanner();
+    // Edits go to the Parameters draft; they apply on Save (see the save bar).
+    const { paramsView, editParams } = usePlanner();
+    const rules = paramsView.rules;
+    const editRules = (fn) => editParams(d => ({ ...d, rules: fn(d.rules) }));
 
     const handleAddRule = () => {
-        updateRules([
-            ...rules,
+        editRules(rs => [
+            ...rs,
             { minHours: 0, maxHours: 0, paidBreaks: 0, unpaidBreaks: 0, paidDuration: 15, unpaidDuration: 30 }
         ]);
     };
 
     const handleUpdateRule = (index, field, value) => {
-        const newRules = [...rules];
-        newRules[index] = { ...newRules[index], [field]: value };
-        updateRules(newRules);
+        editRules(rs => rs.map((r, i) => i === index ? { ...r, [field]: value } : r));
     };
 
     const handleRemoveRule = (index) => {
-        const newRules = rules.filter((_, i) => i !== index);
-        updateRules(newRules);
+        editRules(rs => rs.filter((_, i) => i !== index));
     };
 
     return (

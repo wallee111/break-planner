@@ -6,25 +6,25 @@ import { Input } from '../ui/Input';
 import { Trash2, Plus, Shield, Check, ChevronsUpDown } from 'lucide-react';
 
 export const CoverageRuleConfig = () => {
-    const { coverageRules, updateCoverageRules, roleColors } = usePlanner();
-    const availableRoles = Object.keys(roleColors || {});
+    // Edits go to the Parameters draft; they apply on Save (see the save bar).
+    const { paramsView, editParams } = usePlanner();
+    const coverageRules = paramsView.coverageRules;
+    const availableRoles = Object.keys(paramsView.roleColors || {});
+    const editCoverage = (fn) => editParams(d => ({ ...d, coverageRules: fn(d.coverageRules) }));
 
     const handleAddRule = () => {
-        updateCoverageRules([
-            ...coverageRules,
+        editCoverage(rs => [
+            ...rs,
             { type: 'min_staff', roles: ['Any'], operator: 'OR', count: 1 }
         ]);
     };
 
     const handleUpdateRule = (index, field, value) => {
-        const newRules = [...coverageRules];
-        newRules[index] = { ...newRules[index], [field]: value };
-        updateCoverageRules(newRules);
+        editCoverage(rs => rs.map((r, i) => i === index ? { ...r, [field]: value } : r));
     };
 
     const handleRemoveRule = (index) => {
-        const newRules = coverageRules.filter((_, i) => i !== index);
-        updateCoverageRules(newRules);
+        editCoverage(rs => rs.filter((_, i) => i !== index));
     };
 
     const MultiSelect = ({ selected, onChange }) => {

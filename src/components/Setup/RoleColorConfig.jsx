@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import { usePlanner } from '../../context/PlannerContext';
+import { draftAddRole, draftSetRoleColor, draftRenameRole, draftDeleteRole } from '../../utils/parameterDraft';
 import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
-import { Palette, Trash2, Plus, Check, X } from 'lucide-react';
+import { Trash2, Plus } from 'lucide-react';
 
 export const RoleColorConfig = () => {
-    const { roleColors, updateRoleColor, addRole, renameRole, deleteRole } = usePlanner();
+    // Edits go to the Parameters draft; renames/deletes reach the team and
+    // roster only on Save, so Discard fully undoes them.
+    const { paramsView, editParams } = usePlanner();
+    const roleColors = paramsView.roleColors;
     const [newRoleName, setNewRoleName] = useState('');
     const [editingRole, setEditingRole] = useState(null);
     const [editName, setEditName] = useState('');
@@ -16,7 +20,7 @@ export const RoleColorConfig = () => {
 
     const handleAdd = () => {
         if (!newRoleName.trim()) return;
-        addRole(newRoleName.trim());
+        editParams(d => draftAddRole(d, newRoleName.trim()));
         setNewRoleName('');
     };
 
@@ -27,16 +31,18 @@ export const RoleColorConfig = () => {
 
     const saveEdit = () => {
         if (editName.trim() && editName !== editingRole) {
-            renameRole(editingRole, editName.trim());
+            editParams(d => draftRenameRole(d, editingRole, editName.trim()));
         }
         setEditingRole(null);
     };
 
+    // No confirm(): a delete is only a draft change until Save, and
+    // Discard brings the role back.
     const handleDelete = (role) => {
-        if (confirm(`Are you sure you want to delete the role "${role}"? This will remove it from all employees.`)) {
-            deleteRole(role);
-        }
+        editParams(d => draftDeleteRole(d, role));
     };
+
+    const updateRoleColor = (role, color) => editParams(d => draftSetRoleColor(d, role, color));
 
     return (
         <Card title="Roles">
