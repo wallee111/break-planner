@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext();
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook co-located with its provider
 export const useAuth = () => useContext(AuthContext);
 
 // Generic wording on purpose: never embed the backend URL in error strings.

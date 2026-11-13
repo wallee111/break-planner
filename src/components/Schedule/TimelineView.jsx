@@ -357,7 +357,6 @@ export const TimelineView = () => {
 
       setDragState(prev => ({ ...prev, currentX: e.clientX }));
 
-      const startHourVal = viewRangeRef.current.start;
       const endHourVal = viewRangeRef.current.end;
       const maxDate = setHours(setMinutes(startOfDay(new Date()), 0), endHourVal);
       const dragMinWidth = currentDrag.minWidth || minWidth;
@@ -803,12 +802,10 @@ export const TimelineView = () => {
               key={emp.id}
               emp={emp}
               empSchedule={schedule.find(s => s.employeeId === emp.id)}
-              schedule={schedule}
               hours={hours}
               hourWidth={hourWidth}
               minWidth={minWidth}
               startHour={startHour}
-              endHour={endHour}
               dragState={dragState}
               hoveredBreakId={hoveredBreakId}
               swapCandidate={swapCandidate}

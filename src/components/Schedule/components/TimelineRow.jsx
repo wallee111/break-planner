@@ -28,12 +28,10 @@ const hexToRgba = (hex, alpha) => {
 export const TimelineRow = ({
   emp,
   empSchedule,
-  schedule,
   hours,
   hourWidth,
   minWidth,
   startHour,
-  endHour,
   dragState,
   hoveredBreakId,
   swapCandidate,

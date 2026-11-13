@@ -1,9 +1,7 @@
 import React from 'react';
 import { PlannerProvider } from './context/PlannerContext';
 import { MainLayout } from './components/Layout/MainLayout';
-import { EmployeeList } from './components/Setup/EmployeeList';
 import { EmployeeManager } from './components/Employees/EmployeeManager';
-import { RosterManager } from './components/Setup/RosterManager';
 import { BreakRuleConfig } from './components/Setup/BreakRuleConfig';
 import { CoverageRuleConfig } from './components/Setup/CoverageRuleConfig';
 import { RoleColorConfig } from './components/Setup/RoleColorConfig';
