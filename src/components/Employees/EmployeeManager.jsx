@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { usePlanner } from '../../context/PlannerContext';
-import { Plus, Trash2, Edit2, Save, X, User, Clock, Briefcase, ArrowUp, ArrowDown, Link2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, User, Clock, Briefcase, ArrowUp, ArrowDown, Link2, Check } from 'lucide-react';
 import { Button } from '../ui/Button';
 
 import { HexColorPicker } from 'react-colorful';
@@ -52,6 +52,56 @@ const ColorPicker = ({ value, onChange }) => {
     );
 };
 
+// Per-row WIW calendar feed input. Paste a link, press Enter (or click the
+// save icon / tab away) and it persists to the roster. Saved links live in
+// Supabase (roster.feed_url) — never in the repository.
+const FeedCell = ({ feedUrl, onSave }) => {
+    const [draft, setDraft] = useState('');
+    const [touched, setTouched] = useState(false);
+    const [justSaved, setJustSaved] = useState(false);
+
+    const saved = feedUrl || '';
+    // Show the saved value until the user starts typing; no state-sync effect
+    const value = touched ? draft : saved;
+    const dirty = value !== saved;
+
+    const save = async () => {
+        if (!dirty) return;
+        await onSave(value.trim());
+        setTouched(false);
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 2000);
+    };
+
+    return (
+        <div className="flex items-center gap-1.5">
+            <input
+                type="url"
+                value={value}
+                onChange={e => { setTouched(true); setDraft(e.target.value); }}
+                onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); save(); }
+                    if (e.key === 'Escape') setTouched(false);
+                }}
+                onBlur={save}
+                placeholder="Paste WIW calendar link"
+                spellCheck="false"
+                className="w-56 h-9 px-2 rounded-md border border-slate-300 text-xs focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
+                title={feedUrl ? 'Saved — full link stored in the database' : 'Paste the employee\'s private When I Work calendar link'}
+            />
+            {justSaved ? (
+                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+            ) : dirty ? (
+                <button onClick={save} className="text-indigo-500 hover:text-indigo-700 shrink-0" title="Save link">
+                    <Save className="w-4 h-4" />
+                </button>
+            ) : feedUrl ? (
+                <Link2 className="w-4 h-4 text-emerald-500 shrink-0" />
+            ) : null}
+        </div>
+    );
+};
+
 export const EmployeeManager = () => {
     const { roster, addToRoster, updateRosterEmployee, deleteFromRoster, roleColors } = usePlanner();
     const [isAdding, setIsAdding] = useState(false);
@@ -71,6 +121,11 @@ export const EmployeeManager = () => {
             key,
             direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
         }));
+    };
+
+    // Persist a WIW calendar link pasted into the feed column
+    const handleSaveFeed = async (id, url) => {
+        await updateRosterEmployee(id, { feedUrl: url });
     };
 
     const sortedRoster = [...roster].sort((a, b) => {
@@ -196,13 +251,14 @@ export const EmployeeManager = () => {
                                     {sortConfig.key === 'role' && (sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />)}
                                 </div>
                             </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">WIW Calendar Feed</th>
                             <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-slate-200">
                         {sortedRoster.length === 0 && (
                             <tr>
-                                <td colSpan="3" className="px-6 py-12 text-center text-slate-400 italic">
+                                <td colSpan="4" className="px-6 py-12 text-center text-slate-400 italic">
                                     Your roster is empty. Add employees to start scheduling.
                                 </td>
                             </tr>
@@ -237,24 +293,13 @@ export const EmployeeManager = () => {
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     {editingId === emp.id ? (
-                                        <div className="space-y-2">
-                                            <select
-                                                value={editForm.defaultRole}
-                                                onChange={e => setEditForm({ ...editForm, defaultRole: e.target.value })}
-                                                className="w-full h-9 px-2 rounded-md border border-slate-300 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
-                                            >{roles.map(r => <option key={r} value={r}>{r}</option>)}</select>
-                                            <input
-                                                type="url"
-                                                value={editForm.feedUrl || ''}
-                                                onChange={e => setEditForm({ ...editForm, feedUrl: e.target.value })}
-                                                className="w-full h-9 px-2 rounded-md border border-slate-300 text-xs focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
-                                                placeholder="When I Work calendar link (webcal or https)"
-                                                spellCheck="false"
-                                            />
-                                            <p className="text-[10px] text-slate-400 leading-tight">
-                                                Personal "Subscribe to schedule" link from their account settings. Stored securely, never committed.
-                                            </p>
-                                        </div>
+                                        <select
+                                            value={editForm.defaultRole}
+                                            onChange={e => setEditForm({ ...editForm, defaultRole: e.target.value })}
+                                            className="w-full h-9 px-2 rounded-md border border-slate-300 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
+                                        >
+                                            {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                                        </select>
                                     ) : (
                                         <span
                                             style={{
@@ -262,12 +307,17 @@ export const EmployeeManager = () => {
                                                 color: '#ffffff',
                                                 textShadow: '0 1px 2px rgba(0,0,0,0.2)'
                                             }}
-                                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
                                         >
                                             {emp.defaultRole}
-                                            {emp.feedUrl && <Link2 className="w-3 h-3 opacity-80" />}
                                         </span>
                                     )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <FeedCell
+                                        feedUrl={emp.feedUrl}
+                                        onSave={(url) => handleSaveFeed(emp.id, url)}
+                                    />
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     {editingId === emp.id ? (
