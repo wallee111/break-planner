@@ -1,8 +1,20 @@
 import React, { useMemo } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 import { parse, setHours, setMinutes, format } from 'date-fns';
 
-export const LaborChart = ({ employees, schedule, startHour, endHour, rules = [], roleColors = {} }) => {
+// Static chart props hoisted to module scope: recharts 3 syncs props into an
+// internal store from effects, so fresh inline objects on every render cause
+// store churn (and contributed to a "Maximum update depth" warning).
+const CHART_HEIGHT = 160;
+const CHART_MARGIN = { top: 10, right: 0, left: 0, bottom: 0 };
+const AXIS_TICK = { fontSize: 10, fill: '#64748b' };
+const X_PADDING = { left: 0, right: 0 };
+const TOOLTIP_CURSOR = { stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '3 3' };
+const formatTick = (t) => format(t, 'HH:mm');
+
+// Memoized: TimelineView re-renders often (drag, hover); the chart only needs
+// to re-render when its data inputs actually change.
+const LaborChartImpl = ({ employees, schedule, startHour, endHour, rules = [], roleColors = {}, width }) => {
     // Collect all unique roles present in employees for creating bars
     const allRoles = useMemo(() => {
         const roles = new Set();
@@ -122,82 +134,93 @@ export const LaborChart = ({ employees, schedule, startHour, endHour, rules = []
         return { data: chartData, ticks: tickValues, domain: [startMs, endMs] };
     }, [employees, schedule, startHour, endHour, allRoles]);
 
+    // Filter relevant rules (memoized so ReferenceLine label objects are stable)
+    const minStaffRules = useMemo(
+        () => rules.filter(r => r.type === 'min_staff').map(rule => ({
+            count: rule.count,
+            label: {
+                value: `Min: ${rule.count} (${rule.role || (rule.roles || []).join('/') || 'Any'})`,
+                position: 'insideTopRight',
+                fill: '#ef4444',
+                fontSize: 10,
+                dy: -10
+            }
+        })),
+        [rules]
+    );
+
     if (!employees || employees.length === 0) return null;
 
-    // Filter relevant rules
-    const minStaffRules = rules.filter(r => r.type === 'min_staff');
+    // Explicit size instead of ResponsiveContainer: the parent already knows
+    // the timeline width. ResponsiveContainer rendered once at -1×-1 before
+    // measuring, which logged "width(-1) and height(-1) of chart" warnings.
+    if (!width || width <= 0) return <div style={{ height: CHART_HEIGHT }} />;
 
     return (
-        <div className="h-40 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={true} stroke="#e2e8f0" horizontal={true} />
-                    <XAxis
-                        dataKey="timestamp"
-                        type="number"
-                        domain={domain}
-                        ticks={ticks}
-                        tickFormatter={(t) => format(t, 'HH:mm')}
-                        tick={{ fontSize: 10, fill: '#64748b' }}
-                        axisLine={false}
-                        tickLine={false}
-                        padding={{ left: 0, right: 0 }}
-                    />
-                    <YAxis
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 10, fill: '#64748b' }}
-                        allowDecimals={false}
-                        orientation="right"
-                        width={20}
-                    />
-                    <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '3 3' }} />
+        <div className="w-full" style={{ height: CHART_HEIGHT }}>
+            <AreaChart width={width} height={CHART_HEIGHT} data={data} margin={CHART_MARGIN}>
+                <CartesianGrid strokeDasharray="3 3" vertical={true} stroke="#e2e8f0" horizontal={true} />
+                <XAxis
+                    dataKey="timestamp"
+                    type="number"
+                    domain={domain}
+                    ticks={ticks}
+                    tickFormatter={formatTick}
+                    tick={AXIS_TICK}
+                    axisLine={false}
+                    tickLine={false}
+                    padding={X_PADDING}
+                />
+                <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={AXIS_TICK}
+                    allowDecimals={false}
+                    orientation="right"
+                    width={20}
+                />
+                <Tooltip content={<CustomTooltip />} cursor={TOOLTIP_CURSOR} />
 
-                    {/* Render a Stacked Area for each Role */}
-                    {allRoles.map((role) => (
-                        <Area
-                            key={role}
-                            type="stepAfter"
-                            dataKey={role}
-                            stackId="1"
-                            stroke="none"
-                            fill={roleColors[role] || '#6366f1'}
-                            fillOpacity={0.6}
-                        />
-                    ))}
-
-                    {/* On Break Area */}
+                {/* Render a Stacked Area for each Role */}
+                {allRoles.map((role) => (
                     <Area
+                        key={role}
                         type="stepAfter"
-                        dataKey="onBreak"
+                        dataKey={role}
                         stackId="1"
                         stroke="none"
-                        fill="#94a3b8"
-                        fillOpacity={0.5}
+                        fill={roleColors[role] || '#6366f1'}
+                        fillOpacity={0.6}
                     />
+                ))}
 
-                    {/* Reference Lines for Min Staff rules */}
-                    {minStaffRules.map((rule, idx) => (
-                        <ReferenceLine
-                            key={idx}
-                            y={rule.count}
-                            stroke="#ef4444"
-                            strokeDasharray="3 3"
-                            ifOverflow="extendDomain"
-                            label={{
-                                value: `Min: ${rule.count} (${rule.role})`,
-                                position: 'insideTopRight',
-                                fill: '#ef4444',
-                                fontSize: 10,
-                                dy: -10
-                            }}
-                        />
-                    ))}
-                </AreaChart>
-            </ResponsiveContainer>
+                {/* On Break Area */}
+                <Area
+                    type="stepAfter"
+                    dataKey="onBreak"
+                    stackId="1"
+                    stroke="none"
+                    fill="#94a3b8"
+                    fillOpacity={0.5}
+                />
+
+                {/* Reference Lines for Min Staff rules */}
+                {minStaffRules.map((rule, idx) => (
+                    <ReferenceLine
+                        key={idx}
+                        y={rule.count}
+                        stroke="#ef4444"
+                        strokeDasharray="3 3"
+                        ifOverflow="extendDomain"
+                        label={rule.label}
+                    />
+                ))}
+            </AreaChart>
         </div>
     );
 };
+
+export const LaborChart = React.memo(LaborChartImpl);
 
 const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {

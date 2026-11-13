@@ -462,8 +462,23 @@ export const generateSchedule = (employees, rules, coverageRules = []) => {
 };
 
 // Helper to check if a time is within a break
+// Break times are Date objects from the generator, but merged breaks and
+// schedules restored from JSON carry 'HH:mm' / ISO strings. Normalize to a
+// Date on the same day as `ref` so the interval check never sees an Invalid
+// Date (which silently counted the employee as "not on break").
+const toBreakDate = (value, ref) => {
+    if (value instanceof Date) return value;
+    if (typeof value === 'string' && /^\d{2}:\d{2}$/.test(value)) return parse(value, 'HH:mm', ref);
+    return new Date(value);
+};
+
 const isOnBreak = (time, breaks) => {
-    return breaks.some(b => isWithinInterval(time, { start: b.startTime, end: addMinutes(b.endTime, -1) })); // -1 to avoid overlap on exact boundary
+    return (breaks || []).some(b => {
+        const start = toBreakDate(b.startTime, time);
+        const end = toBreakDate(b.endTime, time);
+        if (isNaN(start) || isNaN(end) || end <= start) return false;
+        return isWithinInterval(time, { start, end: addMinutes(end, -1) }); // -1 to avoid overlap on exact boundary
+    });
 };
 
 export const validateSchedule = (schedule, employees, coverageRules, storeHours) => {
@@ -489,9 +504,9 @@ export const validateSchedule = (schedule, employees, coverageRules, storeHours)
     // 2. Iterate through timeline in 15 minute increments
     let currentTime = minStart;
     while (currentTime < maxEnd) {
-        // Calculate active staff list
+        // Who is scheduled (on shift) vs. actually on the floor (not on break)
+        const scheduledEmployees = [];
         const activeEmployees = [];
-        // const activeRoleCounts = {}; // Keep legacy simple counts for quick 'Any' check or single role perf
 
         schedule.forEach(schedItem => {
             const emp = empMap.get(schedItem.employeeId);
@@ -502,6 +517,7 @@ export const validateSchedule = (schedule, employees, coverageRules, storeHours)
             const shiftEnd = parse(emp.endTime, 'HH:mm', new Date());
 
             if (currentTime >= shiftStart && currentTime < shiftEnd) {
+                scheduledEmployees.push(emp);
                 // Check if on break
                 if (!isOnBreak(currentTime, schedItem.breaks)) {
                     activeEmployees.push(emp);
@@ -533,33 +549,35 @@ export const validateSchedule = (schedule, employees, coverageRules, storeHours)
                 const targetRoles = rule.roles || (rule.role ? [rule.role] : ['Any']);
                 const operator = rule.operator || 'OR';
 
-                let currentCount = 0;
+                const matches = (emp) => {
+                    if (targetRoles.includes('Any')) return true;
+                    const empRoles = emp.roles || [];
+                    return operator === 'AND'
+                        ? targetRoles.every(r => empRoles.includes(r)) // must have ALL target roles
+                        : targetRoles.some(r => empRoles.includes(r)); // AT LEAST ONE target role
+                };
 
-                if (targetRoles.includes('Any')) {
-                    currentCount = activeEmployees.length;
-                } else {
-                    // Filter active employees based on complex logic
-                    currentCount = activeEmployees.filter(emp => {
-                        const empRoles = emp.roles || [];
-                        if (operator === 'AND') {
-                            // Must have ALL target roles
-                            return targetRoles.every(r => empRoles.includes(r));
-                        } else {
-                            // Must have AT LEAST ONE target role
-                            return targetRoles.some(r => empRoles.includes(r));
-                        }
-                    }).length;
-                }
+                const currentCount = activeEmployees.filter(matches).length;
 
                 if (currentCount < rule.count) {
+                    const scheduledCount = scheduledEmployees.filter(matches).length;
                     const timeStr = format(currentTime, 'HH:mm');
 
                     let roleLabel = targetRoles.join(operator === 'AND' ? ' & ' : ' / ');
                     if (targetRoles.length > 3) roleLabel = `${targetRoles.length} Roles`;
 
+                    // 'staffing': too few people are even SCHEDULED — no break
+                    //   plan can fix it; it comes from the shift schedule (WIW).
+                    // 'break': enough people are scheduled, but breaks take the
+                    //   floor below the minimum — a real break-planning conflict.
+                    const kind = scheduledCount < rule.count ? 'staffing' : 'break';
+
                     warnings.push({
                         time: timeStr,
-                        message: `Low coverage: Found ${currentCount} matching [${roleLabel}], needed ${rule.count}`
+                        kind,
+                        message: kind === 'staffing'
+                            ? `Understaffed: ${scheduledCount} [${roleLabel}] scheduled, needs ${rule.count}`
+                            : `Break conflict: ${currentCount} [${roleLabel}] on the floor, needs ${rule.count}`
                     });
                 }
             }

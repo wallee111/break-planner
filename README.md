@@ -33,6 +33,8 @@ npm run dev      # dev server (includes /wiw-proxy → When I Work calendar prox
 npm run build
 npm run lint
 node test_ics.mjs   # verify ICS parsing against a saved feed sample
+node test_validation.mjs   # scheduler + coverage validation regression tests
+npm run check:db    # verify every migration is applied to the database
 ```
 
 ### When I Work sync

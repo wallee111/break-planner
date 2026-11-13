@@ -55,6 +55,7 @@ export const TimelineView = () => {
   // REFS (for event handlers to access current state without re-effects)
   // ==========================================================================
   const containerRef = useRef(null);
+  const crosshairRef = useRef(null);
   const addMenuRef = useRef(null);
   const dragStateRef = useRef(null);
   const scheduleRef = useRef(schedule);
@@ -70,7 +71,6 @@ export const TimelineView = () => {
   // LOCAL UI STATE
   // ==========================================================================
   const [dragState, setDragState] = useState(null);
-  const [crosshairX, setCrosshairX] = useState(null);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [hoveredBreakId, setHoveredBreakId] = useState(null);
   const [sortByTime, setSortByTime] = useState(false);
@@ -84,6 +84,22 @@ export const TimelineView = () => {
   const [syncDate, setSyncDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null); // { type, message }
+
+  // Dismissed warnings, keyed by time|message. Validation is derived, so if a
+  // problem changes (different count/time) it reappears as a new key; a
+  // dismissed problem that's later FIXED simply disappears.
+  const [dismissedWarnings, setDismissedWarnings] = useState(() => new Set());
+  const warningKey = (w) => `${w.time}|${w.message}`;
+  const visibleErrors = useMemo(
+    () => validationErrors.filter(w => !dismissedWarnings.has(`${w.time}|${w.message}`)),
+    [validationErrors, dismissedWarnings]
+  );
+  const dismissedCount = validationErrors.length - visibleErrors.length;
+  const breakConflictCount = visibleErrors.filter(w => w.kind === 'break').length;
+  const staffingGapCount = visibleErrors.length - breakConflictCount;
+  const dismissWarning = (w) => setDismissedWarnings(prev => new Set(prev).add(warningKey(w)));
+  const dismissAllWarnings = () => setDismissedWarnings(new Set(validationErrors.map(warningKey)));
+  const restoreWarnings = () => setDismissedWarnings(new Set());
 
   // Keep dragStateRef in sync
   useEffect(() => { dragStateRef.current = dragState; }, [dragState]);
@@ -620,14 +636,20 @@ export const TimelineView = () => {
   // ==========================================================================
 
   const handleContainerMouseMove = useCallback((e) => {
-    if (!containerRef.current) return;
+    const line = crosshairRef.current;
+    if (!containerRef.current || !line) return;
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    setCrosshairX(x > SIDEBAR_WIDTH ? x : null);
+    if (x > SIDEBAR_WIDTH) {
+      line.style.left = `${x}px`;
+      line.style.display = 'block';
+    } else {
+      line.style.display = 'none';
+    }
   }, []);
 
   const handleContainerMouseLeave = useCallback(() => {
-    setCrosshairX(null);
+    if (crosshairRef.current) crosshairRef.current.style.display = 'none';
   }, []);
 
   const handleValidate = useCallback(() => {
@@ -686,9 +708,14 @@ export const TimelineView = () => {
               <CheckCircle className="w-4 h-4" /> Success
             </div>
           )}
-          {validationErrors.length > 0 && (
-            <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg text-sm">
-              <AlertTriangle className="w-4 h-4" /> {validationErrors.length} Issues
+          {breakConflictCount > 0 && (
+            <div className="flex items-center gap-2 text-red-600 bg-red-50 px-3 py-1.5 rounded-lg text-sm" title="Breaks take coverage below a rule's minimum — fixable by moving breaks">
+              <AlertTriangle className="w-4 h-4" /> {breakConflictCount} break conflict{breakConflictCount === 1 ? '' : 's'}
+            </div>
+          )}
+          {staffingGapCount > 0 && (
+            <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg text-sm" title="Too few people scheduled for a rule — comes from the shift schedule, not the break plan">
+              <AlertTriangle className="w-4 h-4" /> {staffingGapCount} staffing gap{staffingGapCount === 1 ? '' : 's'}
             </div>
           )}
           {syncStatus && (
@@ -746,8 +773,8 @@ export const TimelineView = () => {
         onMouseMove={handleContainerMouseMove}
         onMouseLeave={handleContainerMouseLeave}
       >
-        {/* Crosshair Guide */}
-        <Crosshair x={crosshairX} />
+        {/* Crosshair Guide (imperatively positioned — no re-render on mousemove) */}
+        <Crosshair lineRef={crosshairRef} />
 
         {/* Current Time Indicator */}
         <CurrentTimeIndicator
@@ -774,9 +801,9 @@ export const TimelineView = () => {
 
         {/* Employee Rows */}
         <div className="w-full relative">
-          {/* Validation Warning Zones */}
+          {/* Validation Warning Zones (dismissed warnings hidden) */}
           <ValidationOverlay
-            validationErrors={validationErrors}
+            validationErrors={visibleErrors}
             startHour={startHour}
             hourWidth={hourWidth}
           />
@@ -887,6 +914,7 @@ export const TimelineView = () => {
                     endHour={endHour}
                     rules={coverageRules}
                     roleColors={roleColors}
+                    width={timelineWidth}
                   />
                 </div>
               </div>
@@ -897,21 +925,47 @@ export const TimelineView = () => {
 
       {/* Validation Errors & Activity Log */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {validationErrors.length > 0 && (
+        {(visibleErrors.length > 0 || dismissedCount > 0) && (
           <div className="bg-amber-50 rounded-xl border border-amber-200 shadow-sm flex flex-col max-h-60">
-            <div className="p-3 border-b border-amber-200 bg-amber-100/50 rounded-t-xl sticky top-0 flex items-center justify-between">
+            <div className="p-3 border-b border-amber-200 bg-amber-100/50 rounded-t-xl sticky top-0 flex items-center justify-between gap-2">
               <h3 className="font-semibold text-amber-800 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4" /> Schedule Conflicts
+                <span className="text-xs font-bold bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full">
+                  {visibleErrors.length}
+                </span>
               </h3>
-              <span className="text-xs font-bold bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full">
-                {validationErrors.length}
-              </span>
+              <div className="flex items-center gap-3 text-xs">
+                {dismissedCount > 0 && (
+                  <button onClick={restoreWarnings} className="text-amber-700 hover:text-amber-900 underline" title="Show dismissed warnings again">
+                    Show {dismissedCount} dismissed
+                  </button>
+                )}
+                {visibleErrors.length > 0 && (
+                  <button onClick={dismissAllWarnings} className="text-amber-700 hover:text-amber-900 font-medium" title="Hide all current warnings (they reappear if the problem changes)">
+                    Dismiss all
+                  </button>
+                )}
+              </div>
             </div>
             <div className="overflow-y-auto p-4 space-y-2">
-              {validationErrors.map((err, idx) => (
-                <div key={idx} className="flex gap-2 text-sm text-amber-700 bg-white/50 p-2 rounded">
-                  <span className="font-mono bg-amber-100 px-1 rounded h-fit text-xs font-bold">{err.time}</span>
-                  <span>{err.message}</span>
+              {visibleErrors.length === 0 && (
+                <div className="text-sm text-amber-700/70 italic">All warnings dismissed.</div>
+              )}
+              {visibleErrors.map((err) => (
+                <div
+                  key={warningKey(err)}
+                  className={`group/warn flex items-start gap-2 text-sm p-2 rounded ${
+                    err.kind === 'break' ? 'text-red-700 bg-white/70' : 'text-amber-700 bg-white/40'
+                  }`}
+                >
+                  <span className={`font-mono px-1 rounded h-fit text-xs font-bold ${err.kind === 'break' ? 'bg-red-100' : 'bg-amber-100'}`}>{err.time}</span>
+                  <span className="flex-1">{err.message}</span>
+                  <button
+                    onClick={() => dismissWarning(err)}
+                    className="opacity-40 group-hover/warn:opacity-100 hover:text-slate-900 text-xs px-1"
+                    title="Dismiss this warning"
+                    aria-label="Dismiss warning"
+                  >✕</button>
                 </div>
               ))}
             </div>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
     INITIAL_EMPLOYEES, INITIAL_RULES, INITIAL_COVERAGE_RULES,
     INITIAL_ROLE_COLORS, INITIAL_STORE_HOURS
@@ -58,9 +58,15 @@ export const PlannerProvider = ({ children }) => {
     };
 
     // Meta
-    const [validationErrors, setValidationErrors] = useState([]);
     const [activityLog, setActivityLog] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+
+    // Coverage validation — DERIVED from current state, never stored. Each
+    // warning is { time, kind: 'staffing' | 'break', message }.
+    const validationErrors = useMemo(
+        () => valScheduleAlgo(schedule, employees, coverageRules, storeHours),
+        [schedule, employees, coverageRules, storeHours]
+    );
 
     // --- Logging ---
 
@@ -381,7 +387,7 @@ export const PlannerProvider = ({ children }) => {
         // synced employees and merge into the existing schedule (preserving
         // manually adjusted entries for everyone else).
         if (syncedEmployees.length > 0) {
-            const genEntries = genScheduleAlgo(syncedEmployees, rules);
+            const genEntries = genScheduleAlgo(syncedEmployees, rules, coverageRules);
             const merged = [...schedule];
             for (const entry of genEntries) {
                 const idx = merged.findIndex(s => s.employeeId === entry.employeeId);
@@ -513,27 +519,22 @@ export const PlannerProvider = ({ children }) => {
             addToLog(logAction, 'action');
         }
 
-        const warnings = valScheduleAlgo(newSchedule, employees, coverageRules, storeHours);
-        setValidationErrors(warnings);
-
-        if (warnings.length > 0 && logAction) {
-            addToLog(`Validation found ${warnings.length} issues`, 'warning');
-        }
+        // Validation is derived (see validationErrors useMemo) — it recomputes
+        // from the latest schedule, team and rules on every change, so it can't
+        // go stale or get "stuck" after the underlying problem is fixed.
 
         const today = new Date().toISOString().split('T')[0];
         await api.saveSchedule(today, newSchedule);
     };
 
     const generateSchedule = () => {
-        const newSchedule = genScheduleAlgo(employees, rules);
+        const newSchedule = genScheduleAlgo(employees, rules, coverageRules);
         updateSchedule(newSchedule, 'Generated Schedule');
     };
 
     const validateNow = () => {
-        const warnings = valScheduleAlgo(schedule, employees, coverageRules, storeHours);
-        setValidationErrors(warnings);
-        const isValid = warnings.length === 0;
-        addToLog(isValid ? 'Manual Verification: Schedule is Valid' : `Manual Verification: Found ${warnings.length} issues`, isValid ? 'success' : 'warning');
+        const isValid = validationErrors.length === 0;
+        addToLog(isValid ? 'Manual Verification: Schedule is Valid' : `Manual Verification: Found ${validationErrors.length} issues`, isValid ? 'success' : 'warning');
         return isValid;
     };
 
@@ -559,7 +560,6 @@ export const PlannerProvider = ({ children }) => {
         updateSchedule,
         generateSchedule,
         validationErrors,
-        setValidationErrors,
         roster,
         addToRoster,
         updateRosterEmployee,
