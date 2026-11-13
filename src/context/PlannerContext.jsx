@@ -547,12 +547,6 @@ export const PlannerProvider = ({ children }) => {
         updateSchedule(newSchedule, 'Generated Schedule');
     };
 
-    const validateNow = () => {
-        const isValid = validationErrors.length === 0;
-        addToLog(isValid ? 'Manual Verification: Schedule is Valid' : `Manual Verification: Found ${validationErrors.length} issues`, isValid ? 'success' : 'warning');
-        return isValid;
-    };
-
     // --- Context Value ---
 
     // --- Context Value ---
@@ -590,7 +584,6 @@ export const PlannerProvider = ({ children }) => {
         renameRole,
         deleteRole,
         activityLog,
-        validateNow,
         isLoading
     };
 

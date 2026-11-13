@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { parse, format, addMinutes, differenceInMinutes, setHours, setMinutes, startOfDay, roundToNearestMinutes } from 'date-fns';
-import { Play, AlertTriangle, CheckCircle, Plus, RefreshCw, CalendarDays } from 'lucide-react';
+import { Play, AlertTriangle, Plus, RefreshCw, CalendarDays } from 'lucide-react';
 
 import { calculateBreaks } from '../../utils/scheduler';
 import { usePlanner } from '../../context/PlannerContext';
@@ -40,7 +40,6 @@ export const TimelineView = () => {
     validationErrors,
     roleColors,
     activityLog,
-    validateNow,
     removeEmployee,
     addEmployee,
     roster,
@@ -78,7 +77,6 @@ export const TimelineView = () => {
   const [sortByTime, setSortByTime] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [swapCandidate, setSwapCandidate] = useState(null);
-  const [showSuccess, setShowSuccess] = useState(false);
   const [containerWidth, setContainerWidth] = useState(1000);
   const [selectedBreak, setSelectedBreak] = useState(null); // { empId, breakId }
 
@@ -656,13 +654,6 @@ export const TimelineView = () => {
     if (crosshairRef.current) crosshairRef.current.style.display = 'none';
   }, []);
 
-  const handleValidate = useCallback(() => {
-    if (validateNow()) {
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000);
-    }
-  }, [validateNow]);
-
   const handleAddEmployee = useCallback((emp) => {
     addEmployee({
       name: emp.name,
@@ -707,11 +698,6 @@ export const TimelineView = () => {
       {/* Header Controls */}
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
         <div className="flex items-center gap-4">
-          {showSuccess && (
-            <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg text-sm">
-              <CheckCircle className="w-4 h-4" /> Success
-            </div>
-          )}
           {breakConflictCount > 0 && (
             <div className="flex items-center gap-2 text-red-600 bg-red-50 px-3 py-1.5 rounded-lg text-sm" title="Breaks take coverage below a rule's minimum — fixable by moving breaks">
               <AlertTriangle className="w-4 h-4" /> {breakConflictCount} break conflict{breakConflictCount === 1 ? '' : 's'}
@@ -764,9 +750,6 @@ export const TimelineView = () => {
           </Button>
           <Button onClick={generateSchedule} className="bg-indigo-600 text-white flex items-center gap-2">
             <Play className="w-4 h-4 fill-current" /> Generate
-          </Button>
-          <Button onClick={handleValidate} variant="secondary">
-            Validate
           </Button>
         </div>
       </div>
