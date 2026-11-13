@@ -115,3 +115,45 @@ export const syncRosterForDate = async (rosterItems, dateStr) => {
         }
     }));
 };
+
+/**
+ * Match store-feed events to roster members for a date. A store-wide feed
+ * (e.g. the manager's full-schedule WIW link) contains everyone's shifts in
+ * one calendar; we attribute each event to the roster member whose name
+ * appears in the event's summary or description (case-insensitive). This
+ * avoids depending on any particular WIW summary format.
+ *
+ * Pure — separated from syncStoreFeedForDate so it is testable in Node.
+ *
+ * @returns [{ employee, shift: { startTime, endTime, role }, matched: boolean }]
+ */
+export const storeShiftsFromEvents = (events, roster, dateStr) => {
+    const target = String(dateStr);
+
+    return events
+        .filter(ev => ev.start && toLocalDateKey(ev.start) === target)
+        .map(ev => {
+            const haystack = `${ev.summary || ''} ${ev.description || ''}`.toLowerCase();
+            const match = roster.find(r =>
+                r.name && r.name.trim().length > 1 && haystack.includes(r.name.trim().toLowerCase())
+            );
+
+            return {
+                employee: match || null,
+                matched: !!match,
+                shift: {
+                    startTime: toLocalHHmm(ev.start),
+                    endTime: toLocalHHmm(ev.end),
+                    role: extractRoleFromSummary(ev.summary) || (match ? match.defaultRole : null),
+                    summary: ev.summary,
+                    description: ev.description
+                }
+            };
+        });
+};
+
+/** Fetch a store-wide feed and match its shifts for a date against a roster. */
+export const syncStoreFeedForDate = async (storeFeedUrl, roster, dateStr) => {
+    const { events } = parseIcs(await fetchIcs(storeFeedUrl));
+    return storeShiftsFromEvents(events, roster, dateStr);
+};

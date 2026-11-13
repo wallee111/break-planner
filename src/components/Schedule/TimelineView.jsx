@@ -659,9 +659,10 @@ export const TimelineView = () => {
           message: res.errors[0]
         });
       } else {
+        const unmatchedNote = res.unmatched > 0 ? `, ${res.unmatched} unmatched (not on roster)` : '';
         setSyncStatus({
           type: 'success',
-          message: `Synced: ${res.added} added, ${res.updated} updated, ${res.off} not scheduled`
+          message: `Synced: ${res.added} added, ${res.updated} updated, ${res.off} not scheduled${unmatchedNote}`
         });
       }
     } catch (e) {

@@ -14,7 +14,8 @@ import {
   normalizeFeedUrl,
   extractFeedToken,
   shiftsFromEvents,
-  getShiftsForDate
+  getShiftsForDate,
+  storeShiftsFromEvents
 } from './src/services/wheniworkSync.js';
 
 let passed = 0;
@@ -140,6 +141,52 @@ const emptyFeed = [
 ].join('\r\n');
 const emptyParsed = parseIcs(emptyFeed);
 check('event without DTEND dropped', emptyParsed.events.length === 0);
+
+// ---------------------------------------------------------------------------
+// Store-wide feed: one calendar with everyone's shifts, matched to roster names
+// ---------------------------------------------------------------------------
+console.log('\n— store feed matching —');
+const storeFeed = [
+  'BEGIN:VCALENDAR',
+  'VERSION:2.0',
+  'BEGIN:VEVENT',
+  'UID:900@x',
+  'DTSTART:20261108T123000Z',
+  'DTEND:20261108T203000Z',
+  'SUMMARY:Jane Doe - Shift as Product Guide at Test Store',
+  'END:VEVENT',
+  'BEGIN:VEVENT',
+  'UID:901@x',
+  'DTSTART:20261108T140000Z',
+  'DTEND:20261108T220000Z',
+  'SUMMARY:Shift as Lead at Test Store',
+  'DESCRIPTION:On duty\\: John Smith',
+  'END:VEVENT',
+  'BEGIN:VEVENT',
+  'UID:902@x',
+  'DTSTART:20261108T150000Z',
+  'DTEND:20261108T230000Z',
+  'SUMMARY:Shift as Product Guide at Test Store',
+  'DESCRIPTION:Open shift\\, not on the roster',
+  'END:VEVENT',
+  'END:VCALENDAR'
+].join('\r\n');
+
+const testRoster = [
+  { name: 'Jane Doe', defaultRole: 'Product Guide' },
+  { name: 'John Smith', defaultRole: 'Lead' }
+];
+const storeEvents = parseIcs(storeFeed).events;
+const storeDate = localKey(new Date(Date.UTC(2026, 10, 8, 12, 30)));
+const storeShifts = storeShiftsFromEvents(storeEvents, testRoster, storeDate);
+
+check('three store events on the date', storeShifts.length === 3, `got ${storeShifts.length}`);
+check('name in SUMMARY matched', storeShifts[0]?.matched && storeShifts[0]?.employee?.name === 'Jane Doe');
+check('role still extracted from summary', storeShifts[0]?.shift?.role === 'Product Guide');
+check('name in DESCRIPTION matched', storeShifts[1]?.matched && storeShifts[1]?.employee?.name === 'John Smith');
+check('no-name event unmatched', storeShifts[2]?.matched === false, JSON.stringify(storeShifts[2]?.shift));
+check('unmatched shift still carries times', storeShifts[2]?.shift?.startTime === localHHmm(new Date(Date.UTC(2026, 10, 8, 15, 0))));
+check('matched count', storeShifts.filter(s => s.matched).length === 2);
 
 // ---------------------------------------------------------------------------
 // Optional live check — parses a real feed end-to-end (fetch → parse → bucket)

@@ -111,8 +111,71 @@ const FeedCell = ({ feedUrl, onSave }) => {
     );
 };
 
+// Store-wide WIW feed input (header). One link containing the entire
+// store's schedule — sync matches each event to roster names. Stored in
+// settings (Supabase), never in the repository.
+const StoreFeedInput = ({ value, onSave }) => {
+    const [draft, setDraft] = useState('');
+    const [touched, setTouched] = useState(false);
+    const [justSaved, setJustSaved] = useState(false);
+    const [saveError, setSaveError] = useState(false);
+
+    const saved = value || '';
+    const display = touched ? draft : saved;
+    const dirty = display !== saved;
+
+    const save = async () => {
+        if (!dirty) return;
+        const ok = await onSave(display.trim());
+        if (!ok) {
+            setSaveError(true);
+            setTimeout(() => setSaveError(false), 5000);
+            return;
+        }
+        setTouched(false);
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 2000);
+    };
+
+    return (
+        <div className="flex items-center gap-1.5">
+            <label
+                className="text-xs font-semibold text-slate-500 uppercase whitespace-nowrap"
+                title="A single calendar link containing the whole store's schedule (e.g. the manager's WIW link). Sync WIW matches each shift to employees by name."
+            >
+                Store Feed
+            </label>
+            <input
+                type="url"
+                value={display}
+                onChange={e => { setTouched(true); setDraft(e.target.value); }}
+                onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); save(); }
+                    if (e.key === 'Escape') setTouched(false);
+                }}
+                onBlur={save}
+                placeholder="Store-wide WIW calendar link"
+                spellCheck="false"
+                className="w-64 h-9 px-2 rounded-md border border-slate-200 bg-slate-50 text-xs focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
+                title={value ? 'Saved — full link stored in the database' : 'Paste the store-wide schedule link'}
+            />
+            {justSaved ? (
+                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+            ) : saveError ? (
+                <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" title="Save failed — check your connection and try again" />
+            ) : dirty ? (
+                <button onClick={save} className="text-indigo-500 hover:text-indigo-700 shrink-0" title="Save link">
+                    <Save className="w-4 h-4" />
+                </button>
+            ) : value ? (
+                <Link2 className="w-4 h-4 text-emerald-500 shrink-0" />
+            ) : null}
+        </div>
+    );
+};
+
 export const EmployeeManager = () => {
-    const { roster, addToRoster, updateRosterEmployee, deleteFromRoster, roleColors } = usePlanner();
+    const { roster, addToRoster, updateRosterEmployee, deleteFromRoster, roleColors, storeFeedUrl, updateStoreFeedUrl } = usePlanner();
     const [isAdding, setIsAdding] = useState(false);
 
     // Sort State
@@ -190,16 +253,19 @@ export const EmployeeManager = () => {
 
     return (
         <div className="space-y-6">
-            <header className="flex justify-between items-center">
+            <header className="flex flex-wrap justify-between items-center gap-4">
                 <div>
                     <h2 className="text-xl font-bold text-slate-800">Team Roster</h2>
                     <p className="text-slate-500 text-sm">Manage your master list of employees.</p>
                 </div>
-                {!isAdding && (
-                    <Button onClick={() => setIsAdding(true)} className="bg-indigo-600 text-white hover:bg-indigo-700">
-                        <Plus className="w-4 h-4 mr-2" /> Add Employee
-                    </Button>
-                )}
+                <div className="flex items-center gap-4">
+                    <StoreFeedInput value={storeFeedUrl} onSave={updateStoreFeedUrl} />
+                    {!isAdding && (
+                        <Button onClick={() => setIsAdding(true)} className="bg-indigo-600 text-white hover:bg-indigo-700">
+                            <Plus className="w-4 h-4 mr-2" /> Add Employee
+                        </Button>
+                    )}
+                </div>
             </header>
 
             {/* Add Form */}

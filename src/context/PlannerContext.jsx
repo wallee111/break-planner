@@ -5,7 +5,7 @@ import {
 } from '../utils/initialData';
 import { INITIAL_ROSTER } from '../utils/rosterData';
 import { generateSchedule as genScheduleAlgo, validateSchedule as valScheduleAlgo } from '../utils/scheduler';
-import { syncRosterForDate } from '../services/wheniworkSync';
+import { syncRosterForDate, syncStoreFeedForDate } from '../services/wheniworkSync';
 import * as api from '../services/plannerService';
 import { useAuth } from './AuthContext';
 
@@ -48,6 +48,7 @@ export const PlannerProvider = ({ children }) => {
     const [coverageRules, setCoverageRules] = useState(INITIAL_COVERAGE_RULES);
     const [roleColors, setRoleColors] = useState(INITIAL_ROLE_COLORS);
     const [storeHours, setStoreHours] = useState(INITIAL_STORE_HOURS);
+    const [storeFeedUrl, setStoreFeedUrl] = useState('');
 
     // UI State
     const [viewRange, setViewRange] = useState({ start: 8, end: 20 });
@@ -119,6 +120,11 @@ export const PlannerProvider = ({ children }) => {
                     // Only override colors if DB has valid data
                     if (dbSettings.role_colors && Object.keys(dbSettings.role_colors).length > 0) {
                         setRoleColors(dbSettings.role_colors);
+                    }
+
+                    // Store-wide WIW feed (may be undefined pre-migration)
+                    if (dbSettings.store_feed_url) {
+                        setStoreFeedUrl(dbSettings.store_feed_url);
                     }
                 }
             } catch (err) {
@@ -272,42 +278,42 @@ export const PlannerProvider = ({ children }) => {
 
     // --- Actions: When I Work Sync ---
 
+    /** Save/clear the store-wide WIW feed URL (settings.store_feed_url). */
+    const updateStoreFeedUrl = async (url) => {
+        setStoreFeedUrl(url);
+        if (user) return await api.updateSettings({ store_feed_url: url });
+        return true; // guest mode: local only
+    };
+
     /**
-     * Pull shifts from every roster member's When I Work calendar feed for the
-     * given date (YYYY-MM-DD) and build the daily team from them: employees
-     * already on the team get their shift times/role updated, everyone else
-     * with a shift is added. Roster members without a feed are ignored.
-     * @returns { added, updated, off, errors: string[] }
+     * Pull shifts for the given date (YYYY-MM-DD) and build the daily team:
+     *   1. per-employee feeds (roster.feed_url) — one person's shifts each
+     *   2. a store-wide feed (settings.store_feed_url) — everyone's shifts
+     *      in one calendar, matched to roster names
+     * Employees already on the team get their shift times/role updated,
+     * everyone else with a shift is added. Shift blocks are auto-placed.
+     * @returns { added, updated, off, unmatched, errors: string[] }
      */
     const syncFromWhenIWork = async (dateStr) => {
         const withFeeds = roster.filter(r => r.feedUrl);
-        if (withFeeds.length === 0) {
-            const msg = 'When I Work sync: no calendar feeds configured yet (add them on the Employees page)';
+        if (withFeeds.length === 0 && !storeFeedUrl) {
+            const msg = 'When I Work sync: no calendar feeds configured yet (set a store feed or per-employee links on the Employees page)';
             addToLog(msg, 'warning');
-            return { added: 0, updated: 0, off: 0, errors: [msg] };
+            return { added: 0, updated: 0, off: 0, unmatched: 0, errors: [msg] };
         }
 
         addToLog(`When I Work sync started for ${dateStr}`, 'action');
-        const results = await syncRosterForDate(withFeeds, dateStr);
 
+        const syncedEmployees = []; // final employee objects to auto-schedule
+        const handledNames = new Set(); // dedupe store feed vs per-employee
+        const errors = [];
         let added = 0;
         let updated = 0;
         let off = 0;
-        const errors = [];
-        const syncedEmployees = []; // final employee objects to auto-schedule
+        let unmatched = 0;
 
-        for (const { employee, shifts, error } of results) {
-            if (error) {
-                errors.push(`${employee.name}: ${error}`);
-                continue;
-            }
-            if (shifts.length === 0) {
-                off++; // not scheduled that day
-                continue;
-            }
-
-            // If several shifts land on the same date, use the first
-            const shift = shifts[0];
+        // Shared: apply one roster member's shift to the daily team
+        const applyShift = async (employee, shift) => {
             const role = shift.role || employee.defaultRole;
             if (role) addRole(role); // make sure the role has a color entry
 
@@ -334,6 +340,40 @@ export const PlannerProvider = ({ children }) => {
                     added++;
                 }
             }
+            handledNames.add(employee.name);
+        };
+
+        // 1. Per-employee feeds
+        if (withFeeds.length > 0) {
+            const results = await syncRosterForDate(withFeeds, dateStr);
+            for (const { employee, shifts, error } of results) {
+                if (error) {
+                    errors.push(`${employee.name}: ${error}`);
+                    continue;
+                }
+                if (shifts.length === 0) {
+                    off++; // not scheduled that day
+                    continue;
+                }
+                await applyShift(employee, shifts[0]);
+            }
+        }
+
+        // 2. Store-wide feed
+        if (storeFeedUrl) {
+            try {
+                const storeShifts = await syncStoreFeedForDate(storeFeedUrl, roster, dateStr);
+                for (const { employee, shift, matched } of storeShifts) {
+                    if (!matched) {
+                        unmatched++; // shift on the feed with no matching roster name
+                        continue;
+                    }
+                    if (handledNames.has(employee.name)) continue; // per-employee feed already covered them
+                    await applyShift(employee, shift);
+                }
+            } catch (e) {
+                errors.push(`Store feed: ${e.message || String(e)}`);
+            }
         }
 
         // Auto-place shift blocks: the timeline only renders a shift block for
@@ -351,9 +391,9 @@ export const PlannerProvider = ({ children }) => {
             await updateSchedule(merged, 'Auto-scheduled synced shifts');
         }
 
-        const summary = `When I Work sync (${dateStr}): ${added} added, ${updated} updated, ${off} off, ${errors.length} error(s)`;
+        const summary = `When I Work sync (${dateStr}): ${added} added, ${updated} updated, ${off} off, ${unmatched} unmatched, ${errors.length} error(s)`;
         addToLog(summary, errors.length ? 'warning' : 'success');
-        return { added, updated, off, errors };
+        return { added, updated, off, unmatched, errors };
     };
 
     // --- Actions: Settings ---
@@ -525,6 +565,8 @@ export const PlannerProvider = ({ children }) => {
         updateRosterEmployee,
         deleteFromRoster,
         syncFromWhenIWork,
+        storeFeedUrl,
+        updateStoreFeedUrl,
         roleColors,
         updateRoleColor,
         addRole,
