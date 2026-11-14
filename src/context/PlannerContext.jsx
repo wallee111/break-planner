@@ -128,8 +128,11 @@ export const PlannerProvider = ({ children }) => {
 
                 // 2. Settings
                 if (dbSettings) {
-                    if (dbSettings.break_rules?.length) setRules(dbSettings.break_rules);
-                    if (dbSettings.coverage_rules?.length) setCoverageRules(dbSettings.coverage_rules);
+                    // A saved value is honoured even when empty (e.g. every
+                    // coverage rule deleted). Only NULL = never saved = use
+                    // defaults (see migration_settings_nullable.sql).
+                    if (Array.isArray(dbSettings.break_rules)) setRules(dbSettings.break_rules);
+                    if (Array.isArray(dbSettings.coverage_rules)) setCoverageRules(dbSettings.coverage_rules);
                     if (dbSettings.view_range) setViewRange(dbSettings.view_range);
 
                     // Only override colors if DB has valid data
@@ -605,8 +608,14 @@ export const PlannerProvider = ({ children }) => {
         const { rules: r, coverageRules: c, roleColors: rc, roleOps } = paramDraft;
 
         if (user) {
-            const ok = await api.updateSettings({ break_rules: r, coverage_rules: c, role_colors: rc });
-            if (!ok) {
+            const savedRow = await api.updateSettings({ break_rules: r, coverage_rules: c, role_colors: rc });
+            // Success only if the database returned the row AND it holds
+            // exactly what we sent (guards against a silent no-op write).
+            const confirmed = savedRow && !isDraftDirty(
+                { rules: savedRow.break_rules, coverageRules: savedRow.coverage_rules, roleColors: savedRow.role_colors },
+                { rules: r, coverageRules: c, roleColors: rc }
+            );
+            if (!confirmed) {
                 addToLog('Failed to save parameters', 'error');
                 return false;
             }

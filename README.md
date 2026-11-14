@@ -98,6 +98,7 @@ In the Supabase dashboard → **SQL Editor**, run these files **in this order**:
 | 8 | `migration_feed_url.sql` | `roster.feed_url` (per-employee WIW link) |
 | 9 | `migration_store_feed.sql` | `settings.store_feed_url` (store-wide WIW link) |
 | 10 | `migration_plan_date.sql` | `employees.plan_date` + `schedules.updated_at` (a plan per day). Additive; assigns existing team rows to their last saved date |
+| 11 | `migration_settings_nullable.sql` | Unset settings are NULL (not `[]`), so deleting every rule saves and stays deleted |
 
 Then verify everything is in place:
 
@@ -130,7 +131,8 @@ npm run dev               # http://localhost:5173
    staff per role, `Any` = everyone) and roles/colours. Edits are a draft: a
    **Save changes / Discard** bar slides up as soon as anything changes, and
    leaving the tab with unsaved edits asks whether to save or discard. Role
-   renames and deletes reach the team and roster only when you save.
+   renames and deletes reach the team and roster only when you save. A
+   "Parameters saved" message appears only once the database confirms the save.
 3. **Schedule tab.** Pick the day with the date picker. If nothing is saved for
    it yet (today or later) and feeds are set up, everyone working that day appears
    automatically with their shift and auto-placed breaks. **Sync WIW** re-pulls

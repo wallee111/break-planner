@@ -7,7 +7,7 @@ import { cn } from '../../utils/cn';
  * edits. It stays mounted and animates via transform so it can slide both in
  * and out; while hidden it is inert (not focusable or clickable).
  */
-export const UnsavedChangesBar = ({ visible, error, saving, onSave, onDiscard }) => (
+export const UnsavedChangesBar = ({ visible, error, blocked, saving, onSave, onDiscard }) => (
     <div
         className={cn(
             'fixed bottom-0 right-0 left-0 md:left-64 z-40 flex justify-center px-4 pb-6 pointer-events-none',
@@ -42,7 +42,7 @@ export const UnsavedChangesBar = ({ visible, error, saving, onSave, onDiscard })
                 </button>
                 <button
                     onClick={onSave}
-                    disabled={saving || !!error}
+                    disabled={saving || blocked}
                     className="h-9 px-4 rounded-lg text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                     {saving && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -57,7 +57,7 @@ export const UnsavedChangesBar = ({ visible, error, saving, onSave, onDiscard })
  * "Unsaved changes" popup shown when leaving the Parameters tab with edits.
  * Save & continue / Discard & continue / Keep editing (Esc or backdrop).
  */
-export const LeaveWithUnsavedDialog = ({ open, targetLabel, error, saving, onSave, onDiscard, onCancel }) => {
+export const LeaveWithUnsavedDialog = ({ open, targetLabel, error, blocked, saving, onSave, onDiscard, onCancel }) => {
     const saveRef = useRef(null);
 
     useEffect(() => {
@@ -112,7 +112,7 @@ export const LeaveWithUnsavedDialog = ({ open, targetLabel, error, saving, onSav
                     <button
                         ref={saveRef}
                         onClick={onSave}
-                        disabled={saving || !!error}
+                        disabled={saving || blocked}
                         className="h-9 px-4 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                         {saving && <Loader2 className="w-4 h-4 animate-spin" />}

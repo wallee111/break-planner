@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Calendar, Users, Settings, BarChart2 } from 'lucide-react';
+import { Calendar, Users, Settings, BarChart2, CheckCircle2 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { usePlanner } from '../../context/PlannerContext';
 import { UnsavedChangesBar, LeaveWithUnsavedDialog } from './UnsavedChanges';
@@ -41,8 +41,18 @@ export const MainLayout = ({ children }) => {
         const ok = await saveParams();
         setSaving(false);
         if (!ok) setSaveFailed(true);
+        else setSavedToast(n => (n || 0) + 1); // confirmation only after a verified save
         return ok;
     };
+
+    // "Parameters saved" popup: shown only when the database confirmed the
+    // save; hides itself after a few seconds.
+    const [savedToast, setSavedToast] = useState(null);
+    useEffect(() => {
+        if (!savedToast) return;
+        const t = setTimeout(() => setSavedToast(null), 3500);
+        return () => clearTimeout(t);
+    }, [savedToast]);
 
     const saveAndLeave = async () => {
         if (await save()) {
@@ -122,15 +132,31 @@ export const MainLayout = ({ children }) => {
             <UnsavedChangesBar
                 visible={showBar && !pendingTab}
                 error={saveErrorText}
+                blocked={!!paramsError}
                 saving={saving}
                 onSave={save}
                 onDiscard={() => { discardParams(); setSaveFailed(false); }}
             />
 
+            {savedToast && (
+                <div className="fixed top-4 right-4 z-50 toast-in" role="status" aria-live="polite" data-testid="saved-toast">
+                    <div className="flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm border text-emerald-700 bg-emerald-50 border-emerald-200">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>Parameters saved</span>
+                        <button
+                            onClick={() => setSavedToast(null)}
+                            className="ml-1 text-current opacity-50 hover:opacity-100"
+                            aria-label="Close saved message"
+                        >✕</button>
+                    </div>
+                </div>
+            )}
+
             <LeaveWithUnsavedDialog
                 open={!!pendingTab}
                 targetLabel={navItems.find(t => t.id === pendingTab)?.label}
                 error={saveErrorText}
+                blocked={!!paramsError}
                 saving={saving}
                 onSave={saveAndLeave}
                 onDiscard={discardAndLeave}
