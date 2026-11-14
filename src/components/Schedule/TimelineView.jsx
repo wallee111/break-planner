@@ -734,38 +734,41 @@ export const TimelineView = () => {
 
   return (
     <div className="space-y-6 select-none" ref={containerRef}>
-      {/* Header Controls */}
-      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-        <div className="flex items-center gap-4">
-          {breakConflictCount > 0 && (
-            <div className="flex items-center gap-2 text-red-600 bg-red-50 px-3 py-1.5 rounded-lg text-sm" title="Breaks take coverage below a rule's minimum — fixable by moving breaks">
-              <AlertTriangle className="w-4 h-4" /> {breakConflictCount} break conflict{breakConflictCount === 1 ? '' : 's'}
-            </div>
-          )}
-          {staffingGapCount > 0 && (
-            <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg text-sm" title="Too few people scheduled for a rule — comes from the shift schedule, not the break plan">
-              <AlertTriangle className="w-4 h-4" /> {staffingGapCount} staffing gap{staffingGapCount === 1 ? '' : 's'}
-            </div>
-          )}
-          {syncStatus && (
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm ${
+      {/* Sync result — a fixed popup instead of inline text, so appearing
+          and clearing it never reflows the header buttons. */}
+      {syncStatus && (
+        <div
+          className="fixed top-4 right-4 z-50 toast-in"
+          role="status"
+          aria-live="polite"
+          data-testid="sync-toast"
+        >
+          <div
+            className={`flex items-start gap-2 max-w-sm px-4 py-3 rounded-lg shadow-lg text-sm border ${
               syncStatus.type === 'error'
-                ? 'text-red-600 bg-red-50'
-                : 'text-emerald-600 bg-emerald-50'
-            }`}>
-              <RefreshCw className="w-4 h-4 shrink-0" />
-              <span>{syncStatus.message}</span>
-              <button
-                onClick={() => setSyncStatus(null)}
-                className="ml-1 text-current opacity-50 hover:opacity-100 text-xs"
-                title="Dismiss"
-              >✕</button>
-            </div>
-          )}
+                ? 'text-red-700 bg-red-50 border-red-200'
+                : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+            }`}
+          >
+            <RefreshCw className={`w-4 h-4 shrink-0 mt-0.5 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span className="flex-1">{syncStatus.message}</span>
+            <button
+              onClick={() => setSyncStatus(null)}
+              className="text-current opacity-50 hover:opacity-100"
+              title="Close"
+              aria-label="Close sync message"
+            >✕</button>
+          </div>
         </div>
+      )}
 
-        <div className="flex gap-2 items-center flex-wrap">
-          <div className="flex items-center h-9 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden">
+      {/* Header Controls — fixed left (date + Today) and fixed right (actions);
+          the warning chips live in the flexible middle, so they appear and
+          disappear without moving anything. */}
+      <div className="flex flex-col md:flex-row md:items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+        {/* Left: the day being planned (fixed width so the bar never resizes) */}
+        <div className="flex gap-2 items-center shrink-0">
+          <div className="flex items-center h-9 w-56 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden">
             <button
               onClick={() => shiftDate(-1)}
               disabled={dateLocked}
@@ -775,9 +778,9 @@ export const TimelineView = () => {
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <label className="flex items-center gap-2 px-2 h-full border-x border-slate-200" title="Pick the day to plan">
-              <CalendarDays className="w-4 h-4 text-slate-400" />
-              <span className="text-sm font-medium text-slate-700 whitespace-nowrap">{planDateLabel}</span>
+            <label className="flex items-center gap-2 px-2 h-full border-x border-slate-200 flex-1 min-w-0" title="Pick the day to plan">
+              <CalendarDays className="w-4 h-4 text-slate-400 shrink-0" />
+              <span className="text-sm font-medium text-slate-700 truncate">{planDateLabel}</span>
               <input
                 type="date"
                 value={planDate}
@@ -802,11 +805,29 @@ export const TimelineView = () => {
               Today
             </Button>
           )}
+        </div>
+
+        {/* Middle: coverage warnings — flexible space, pushes the actions right */}
+        <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0 min-h-9">
+          {breakConflictCount > 0 && (
+            <div className="flex items-center gap-2 text-red-600 bg-red-50 px-3 py-1.5 rounded-lg text-sm" title="Breaks take coverage below a rule's minimum — fixable by moving breaks">
+              <AlertTriangle className="w-4 h-4" /> {breakConflictCount} break conflict{breakConflictCount === 1 ? '' : 's'}
+            </div>
+          )}
+          {staffingGapCount > 0 && (
+            <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg text-sm" title="Too few people scheduled for a rule — comes from the shift schedule, not the break plan">
+              <AlertTriangle className="w-4 h-4" /> {staffingGapCount} staffing gap{staffingGapCount === 1 ? '' : 's'}
+            </div>
+          )}
+        </div>
+
+        {/* Right: actions (fixed width each, so no jitter while syncing) */}
+        <div className="flex gap-2 items-center shrink-0">
           <Button
             onClick={handleSyncWhenIWork}
             variant="secondary"
             disabled={isSyncing}
-            className="flex items-center gap-2"
+            className="flex items-center justify-center gap-2 min-w-[8.75rem]"
             title="Pull shifts from When I Work feeds into the daily team"
           >
             <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
